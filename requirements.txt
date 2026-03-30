@@ -8,3 +8,4 @@ streamlit-geolocation
 streamlit-js-eval
 geopy
 openpyxl
+xlsxwriter
