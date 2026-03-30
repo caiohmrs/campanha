@@ -6,3 +6,5 @@ extra-streamlit-components
 google-api-python-client
 streamlit-geolocation
 streamlit-js-eval
+geopy
+openpyxl
