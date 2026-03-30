@@ -652,40 +652,38 @@ st.markdown(f"""
 # --- VISÃO: COLABORADOR ---
 if cargo_limpo == "colaborador":
     
-    # 1. Carregar dados das mensagens
+    # 1. CARREGAMENTO PRÉVIO DA MENSAGEM (Define 'm' logo no início)
     df_msgs = carregar_dados("Mensagens")
     df_usuarios = carregar_dados("Usuarios")
-    m = None
-    
-    if df_msgs is not None:
-        msg_grupo = df_msgs[df_msgs['ID_Alvo'].astype(str) == str(u['ID_Grupo'])]
+    m = None 
+
+    if df_msgs is not None and not df_msgs.empty:
+        # Filtra pelo ID do Grupo
+        msg_grupo = df_msgs[df_msgs['ID_Alvo'].astype(str).str.strip() == str(u['ID_Grupo']).strip()]
         
-        # --- LÓGICA DE TELA DE BLOQUEIO (SPLASH SCREEN) ---
-        if not msg_grupo.empty and not st.session_state["mensagem_exibida"]:
+        if not msg_grupo.empty:
             m = msg_grupo.iloc[-1]
             
-            # Criamos uma tela cheia amarela com a mensagem
-            st.markdown(f"""
-                <div style='background-color: #FFEB00; padding: 40px 20px; border: 5px solid #1D1D1B; 
-                            box-shadow: 10px 10px 0px #1D1D1B; text-align: center; margin-top: 20px;'>
-                    <h1 style='font-family: "Archivo Black", sans-serif; font-style: italic; color: #1D1D1B; font-size: 2.5rem;'>
-                        COMANDO 2026<br><span style='color: #E20613;'>INFORME DO DIA</span>
-                    </h1>
-                    <hr style='border: 2px solid #1D1D1B; margin: 20px 0;'>
-                    <p style='font-size: 1.4rem; font-weight: bold; color: #1D1D1B; line-height: 1.4;'>
-                        {m['Mensagem_Inicial']}
-                    </p>
-                </div>
-                <br>
-            """, unsafe_allow_html=True)
-            
-            # O botão de entrar fica logo abaixo do poster
-            if st.button("✅ LI AS INSTRUÇÕES E QUERO ENTRAR", width='stretch', type="primary"):
-                st.session_state["mensagem_exibida"] = True
-                st.rerun()
+            # --- LÓGICA DE TELA DE BLOQUEIO (SPLASH SCREEN) ---
+            if not st.session_state["mensagem_exibida"]:
+                st.markdown(f"""
+                    <div style='background-color: #FFEB00; padding: 40px 20px; border: 5px solid #1D1D1B; 
+                                box-shadow: 10px 10px 0px #1D1D1B; text-align: center; margin-top: 20px;'>
+                        <h1 style='font-family: "Archivo Black", sans-serif; font-style: italic; color: #1D1D1B; font-size: 2.5rem;'>
+                            COMANDO 2026<br><span style='color: #E20613;'>INFORME DO DIA</span>
+                        </h1>
+                        <hr style='border: 2px solid #1D1D1B; margin: 20px 0;'>
+                        <p style='font-size: 1.4rem; font-weight: bold; color: #1D1D1B; line-height: 1.4;'>
+                            {m['Mensagem_Inicial']}
+                        </p>
+                    </div>
+                    <br>
+                """, unsafe_allow_html=True)
                 
-            st.stop()
-
+                if st.button("✅ LI AS INSTRUÇÕES E QUERO ENTRAR", width='stretch', type="primary"):
+                    st.session_state["mensagem_exibida"] = True
+                    st.rerun()
+                st.stop()
 
     # 3. CAPTURA DE GPS COMPACTA
     location_data = get_geolocation()
@@ -727,7 +725,7 @@ if cargo_limpo == "colaborador":
             if st.button("🏁 SAÍDA (CHECK-OUT)", width='stretch', key="btn_modal_out"):
                 modal_checkout(u, agora)
 
-        # --- SEÇÃO DE MISSÕES (FIXAS) ---
+        # --- SEÇÃO DE MISSÕES ---
         st.divider()
         st.markdown("""
             <div style='background-color: #FFEB00; padding: 15px; border: 4px solid #1D1D1B; box-shadow: 8px 8px 0px #1D1D1B; text-align: center; margin-bottom: 25px;'>
@@ -735,29 +733,31 @@ if cargo_limpo == "colaborador":
             </div>
         """, unsafe_allow_html=True)
 
-        # TAREFA PRINCIPAL (Puxa da planilha se m existir, senão usa texto padrão)
-        if m is not None and str(m['Tarefa_Direcionada']) != "nan":
-            t_txt = str(m['Tarefa_Direcionada']).upper()
-        else:
+        # Lógica de extração segura da tarefa
+        t_txt = ""
+        if m is not None:
+            val_planilha = str(m.get('Tarefa_Direcionada', '')).strip()
+            if val_planilha.lower() != 'nan' and val_planilha != "":
+                t_txt = val_planilha.upper()
+
+        if not t_txt:
             t_txt = "MOBILIZAÇÃO GERAL E PANFLETAGEM"
 
         with st.container(border=True): 
             st.markdown(f"<h3 style='text-align: center; color: #1D1D1B; margin-bottom: 10px;'>🚩 MISSÃO PRIORITÁRIA</h3>", unsafe_allow_html=True)
-            st.markdown(f"<p style='text-align: center; font-weight: bold; font-size: 1.1rem;'>{t_txt}</p>", unsafe_allow_html=True)
+            st.markdown(f"<p style='text-align: center; font-weight: bold; font-size: 1.1rem; color: #E20613;'>{t_txt}</p>", unsafe_allow_html=True)
             
             if st.button(f"CONCLUIR MISSÃO DE HOJE", width='stretch', key="btn_tarefa_fixa"):
                 registrar_acao(u['ID_Usuario'], f"CONCLUIU: {t_txt}", localizacao=st.session_state.get('last_coords'))
-            
                 st.success("MISSÃO REGISTRADA COM SUCESSO!")
 
         st.markdown("<br>", unsafe_allow_html=True)
 
-# --- AÇÕES DE REDE FIXAS ---
+        # --- AÇÕES DE REDE ---
         st.markdown("<h3 style='font-size: 1.2rem;'>📲 AÇÕES DE REDE</h3>", unsafe_allow_html=True)
         col_m1, col_m2 = st.columns(2)
 
         with col_m1:
-            # --- LÓGICA INSTAGRAM ---
             if st.button("📸 CURTA, COMENTE E COMPARTILHE NOSSO ÚLTIMO POST!", width='stretch', key="fixo_insta"):
                 registrar_acao(u['ID_Usuario'], "AÇÃO: INTERAÇÃO INSTAGRAM", localizacao=st.session_state.get('last_coords'))
                 st.markdown(f"""
@@ -769,19 +769,10 @@ if cargo_limpo == "colaborador":
                 """, unsafe_allow_html=True)
 
         with col_m2:
-            # --- LÓGICA WHATSAPP ---
             if st.button("💬 TRAGA UM NOVO AMIGO PARA SER COLABORADOR!", width='stretch', key="fixo_whats"):
-                # 1. Registra a ação no banco de dados
                 registrar_acao(u['ID_Usuario'], "AÇÃO: TRAZER NOVO COLABORADOR!", localizacao=st.session_state.get('last_coords'))
-                
-                # 2. Prepara a mensagem padrão (URL Encoded)
-                # Você pode alterar o texto abaixo como quiser!
-                mensagem_pronta = "Salve! Dá uma olhada no que o Max Maciel está fazendo pelo DF. Estou junto nessa campanha e gostaria do seu apoio. Vamos juntos? 🚀 https://www.instagram.com/maxmacieldf/"
-                
-                import urllib.parse
+                mensagem_pronta = "Salve! Dá uma olhada no que o Max Maciel está fazendo pelo DF. Vamos juntos? 🚀 https://www.instagram.com/maxmacieldf/"
                 msg_url = urllib.parse.quote(mensagem_pronta)
-                
-                # 3. Mostra o botão de redirecionamento (estilo ID Visual)
                 st.markdown(f"""
                     <a href="https://wa.me/?text={msg_url}" target="_blank">
                         <div style='background-color: #1D1D1B; color: #FFEB00; text-align: center; padding: 10px; border: 2px solid #FFEB00; font-weight: bold; font-size: 0.8rem;'>
@@ -790,68 +781,52 @@ if cargo_limpo == "colaborador":
                     </a>
                 """, unsafe_allow_html=True)
 
-    # --- TAB DE CONTRATOS (Permanece igual) ---
     with tab_contratos:
-        # Seu código de contratos aqui...
-        pass
-
-    with tab_contratos:
-        # (Seu código de contratos permanece o mesmo, chamando carregar_dados e as funções de upload)
         st.subheader("📄 Meus Documentos")
         df_contratos = carregar_dados("Contratos")
         if df_contratos is not None:
             meus_docs = df_contratos[df_contratos['ID_Usuario'].astype(str) == str(u['ID_Usuario'])]
-            for _, doc in meus_docs.iterrows():
-                with st.container(border=True):
-                    st.write(f"**Doc:** {doc['Nome_Arquivo']}")
-                    st.link_button("📥 Baixar Original", doc['Link_Original'])
-                    arq = st.file_uploader("Upload Assinado (PDF)", type=['pdf'], key=doc['Nome_Arquivo'])
-                    if st.button("Confirmar Envio", key=f"btn_{doc['Nome_Arquivo']}"):
-                        if arq:
-                            link = salvar_documento_drive(arq, f"ASSINADO_{u['Nome']}_{doc['Nome_Arquivo']}")
-                            if link and atualizar_contrato_enviado(u['ID_Usuario'], doc['Nome_Arquivo'], link):
-                                st.success("Enviado!")
-                                st.rerun()
+            if not meus_docs.empty:
+                for _, doc in meus_docs.iterrows():
+                    with st.container(border=True):
+                        st.write(f"**Doc:** {doc['Nome_Arquivo']}")
+                        st.link_button("📥 Baixar Original", doc['Link_Original'], width='stretch')
+                        arq = st.file_uploader("Upload Assinado (PDF)", type=['pdf'], key=f"up_{doc['Nome_Arquivo']}")
+                        if st.button("Confirmar Envio", key=f"btn_{doc['Nome_Arquivo']}", width='stretch', type="primary"):
+                            if arq:
+                                with st.spinner("Enviando..."):
+                                    link = salvar_documento_drive(arq, f"ASSINADO_{u['Nome']}_{doc['Nome_Arquivo']}")
+                                    if link and atualizar_contrato_enviado(u['ID_Usuario'], doc['Nome_Arquivo'], link):
+                                        st.success("Enviado com sucesso!")
+                                        time.sleep(1)
+                                        st.rerun()
+            else:
+                st.info("Nenhum contrato pendente.")
 
-# --- RODAPÉ DE SUPORTE (FORA DAS ABAS) ---
+    # --- RODAPÉ DE SUPORTE (FORA DAS ABAS) ---
     st.markdown("<div style='margin-top: 30px;'></div>", unsafe_allow_html=True)
     st.divider()
     st.markdown("<h3 style='font-size: 1.2rem; text-align: left;'>🆘 PRECISA DE AJUDA?</h3>", unsafe_allow_html=True)
 
     col_sup1, col_sup2 = st.columns(2)
-
-    # Busca o supervisor
     id_supervisor_dele = str(u.get('ID_Supervisor', '')).strip().lower()
-    
-    # Agora df_usuarios existe!
-    if df_usuarios is not None:
-        dados_supervisor = df_usuarios[df_usuarios['ID_Usuario'].str.lower().str.strip() == id_supervisor_dele]
-    else:
-        dados_supervisor = pd.DataFrame()
+    dados_supervisor = df_usuarios[df_usuarios['ID_Usuario'].str.lower().str.strip() == id_supervisor_dele] if df_usuarios is not None else pd.DataFrame()
 
     with col_sup1:
         if not dados_supervisor.empty:
             whats_sup = sanitize_whatsapp(dados_supervisor.iloc[0]['WhatsApp'])
             nome_sup = dados_supervisor.iloc[0]['Nome'].split()[0].upper()
             msg_sup = f"Olá {nome_sup}! Sou colaborador da sua equipe e preciso de ajuda."
-            
-            st.link_button(
-                f"👤 FALAR COM {nome_sup}", 
-                f"https://api.whatsapp.com/send?phone={whats_sup}&text={urllib.parse.quote(msg_sup)}",
-                width='stretch'
-            )
+            st.link_button(f"👤 FALAR COM {nome_sup}", f"https://wa.me/{whats_sup}?text={urllib.parse.quote(msg_sup)}", width='stretch')
         else:
             st.button("👤 SUPERVISOR NÃO ENCONTRADO", disabled=True, width='stretch')
 
     with col_sup2:
-        whats_tecnico = "5561998788292" # <--- COLOQUE O NÚMERO DE SUPORTE REAL AQUI
+        whats_tecnico = "5561998788292"
         msg_tecnica = "Olá! Estou tendo dificuldades técnicas com o aplicativo Comando 2026."
-        
-        st.link_button(
-            "🛠️ SUPORTE DO APP", 
-            f"https://api.whatsapp.com/send?phone={whats_tecnico}&text={urllib.parse.quote(msg_tecnica)}",
-            width='stretch'
-        )
+        st.link_button("🛠️ SUPORTE DO APP", f"https://wa.me/{whats_tecnico}?text={urllib.parse.quote(msg_tecnica)}", width='stretch')
+
+    st.markdown("<div style='margin-bottom: 50px;'></div>", unsafe_allow_html=True)
 
 
 # --- VISÃO: SUPERVISOR --- 
@@ -1096,8 +1071,8 @@ elif cargo_limpo == "admin":
                             lista_html += "</div>"
                             st.markdown(lista_html, unsafe_allow_html=True)
 
-    # ==========================================
-    # ABA 2: MENSAGENS E MISSÕES
+# ==========================================
+    # ABA 2: MENSAGENS E MISSÕES (AJUSTADO P/ 4 COLUNAS)
     # ==========================================
     with tab_mensagens:
         st.markdown("<h2 style='font-family: \"Archivo Black\", sans-serif; color: #1D1D1B; margin-bottom: 25px; font-size: 2rem;'>DIRETRIZES DO DIA</h2>", unsafe_allow_html=True)
@@ -1112,32 +1087,50 @@ elif cargo_limpo == "admin":
         try:
             client = _get_gspread_client()
             aba_msg = client.open_by_key(st.secrets["planilha"]["id"]).worksheet("Mensagens")
-            df_msg = pd.DataFrame(aba_msg.get_all_records())
+            # Puxa os dados
+            dados_msg = aba_msg.get_all_records()
+            df_msg = pd.DataFrame(dados_msg)
 
-            alvo_selecionado = st.selectbox("1. SELECIONE O GRUPO:", ["Novo..."] + df_msg["ID_Alvo"].unique().tolist())
+            # Lista de alvos únicos
+            lista_alvos = df_msg["ID_Alvo"].unique().tolist() if not df_msg.empty else []
+            alvo_selecionado = st.selectbox("1. SELECIONE O GRUPO:", ["Novo..."] + lista_alvos)
 
             with st.form("form_admin_msg"):
-                if alvo_selecionado == "Novo...": id_alvo, msg_i, tar = "", "", ""
+                if alvo_selecionado == "Novo...": 
+                    id_alvo, msg_i, tar = "", "", ""
                 else:
+                    # Filtra a linha do grupo selecionado
                     d = df_msg[df_msg["ID_Alvo"] == alvo_selecionado].iloc[-1]
-                    id_alvo, msg_i, tar = d.get("ID_Alvo", ""), d.get("Mensagem_Inicial", ""), d.get("Tarefa_Direcionada", "")
+                    id_alvo = d.get("ID_Alvo", "")
+                    msg_i = d.get("Mensagem_Inicial", "")
+                    tar = d.get("Tarefa_Direcionada", "")
 
-                f_id = st.text_input("ID DO GRUPO (EX: ZONA_SUL):", value=id_alvo)
-                f_msg = st.text_area("MENSAGEM NO POP-UP DO COLABORADOR:", value=msg_i, height=200)
-                f_tar = st.text_area("MISSÃO PRIORITÁRIA DE RUA:", value=tar, height=120)
+                f_id = st.text_input("ID DO GRUPO (IGUAL AO CADASTRADO):", value=id_alvo)
+                f_msg = st.text_area("MENSAGEM NO POP-UP (BOAS-VINDAS):", value=msg_i, height=150)
+                f_tar = st.text_area("MISSÃO DE RUA (TAREFA PRINCIPAL):", value=tar, height=100)
 
-                if st.form_submit_button("🚀 PUBLICAR PARA A EQUIPE", type="primary", width='stretch'):
-                    data_auto = (datetime.utcnow() - timedelta(hours=3)).strftime("%d/%m/%Y")
-                    if alvo_selecionado != "Novo...":
-                        try:
-                            cell = aba_msg.find(str(alvo_selecionado))
-                            if cell: aba_msg.delete_rows(cell.row)
-                        except: pass
-                    aba_msg.append_row([f_id, f_msg, "", "", f_tar, data_auto])
-                    st.success("✅ MISSÃO PUBLICADA!")
-                    st.cache_data.clear()
-                    time.sleep(1)
-                    st.rerun()
+                if st.form_submit_button("🚀 ATUALIZAR DIRETRIZES", type="primary", width='stretch'):
+                    if f_id:
+                        data_auto = (datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=3)).strftime("%d/%m/%Y")
+                        
+                        # SÃO APENAS ESSES 4 VALORES:
+                        # A=ID_Alvo, B=Mensagem_Inicial, C=Tarefa_Direcionada, D=Data_Referencia
+                        nova_linha = [f_id, f_msg, f_tar, data_auto]
+                        
+                        if alvo_selecionado != "Novo...":
+                            try:
+                                cell = aba_msg.find(str(alvo_selecionado))
+                                if cell:
+                                    aba_msg.delete_rows(cell.row)
+                            except:
+                                pass
+                        
+                        aba_msg.append_row(nova_linha) # Salva exatamente nas colunas A, B, C, D
+                        st.success("✅ ATUALIZADO!")
+                        st.cache_data.clear()
+                        st.rerun()
+                    else:
+                        st.error("O ID DO GRUPO É OBRIGATÓRIO")
         except Exception as e:
             st.error(f"Erro na conexão: {e}")
 
