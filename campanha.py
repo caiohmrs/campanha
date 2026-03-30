@@ -832,149 +832,207 @@ if cargo_limpo == "colaborador":
 # --- VISÃO: SUPERVISOR --- 
 elif cargo_limpo == "supervisor":
 
+    # 1. CARREGAMENTO PRÉVIO DE DADOS (Igual ao Colaborador)
+    df_msgs = carregar_dados("Mensagens")
     df_usuarios = carregar_dados("Usuarios")
     df_logs = carregar_dados("Logs")
+    m = None 
 
-    if df_usuarios is not None and df_logs is not None:
-        minha_equipe = df_usuarios[df_usuarios['ID_Supervisor'].astype(str) == str(u['ID_Usuario'])]
+    if df_msgs is not None and not df_msgs.empty:
+        # Filtra pelo grupo do Supervisor para as diretrizes dele
+        msg_grupo = df_msgs[df_msgs['ID_Alvo'].astype(str).str.strip() == str(u['ID_Grupo']).strip()]
+        if not msg_grupo.empty:
+            m = msg_grupo.iloc[-1]
+            # Splash Screen inicial
+            if not st.session_state["mensagem_exibida"]:
+                st.markdown(f"""
+                    <div style='background-color: #FFEB00; padding: 40px 20px; border: 5px solid #1D1D1B; 
+                                box-shadow: 10px 10px 0px #1D1D1B; text-align: center; margin-top: 20px;'>
+                        <h1 style='font-family: "Archivo Black", sans-serif; font-style: italic; color: #1D1D1B; font-size: 2.5rem;'>
+                            COMANDO 2026<br><span style='color: #E20613;'>DIRETRIZES DE LIDERANÇA</span>
+                        </h1>
+                        <hr style='border: 2px solid #1D1D1B; margin: 20px 0;'>
+                        <p style='font-size: 1.4rem; font-weight: bold; color: #1D1D1B; line-height: 1.4;'>{m['Mensagem_Inicial']}</p>
+                    </div><br>
+                """, unsafe_allow_html=True)
+                if st.button("✅ CIENTE DAS DIRETRIZES", width='stretch', type="primary"):
+                    st.session_state["mensagem_exibida"] = True
+                    st.rerun()
+                st.stop()
 
-        # 1. MÉTRICAS NO TOPO
-        espaco_metricas = st.empty()
+    # 2. CAPTURA DE GPS COMPACTA (Sempre visível no topo)
+    location_data = get_geolocation()
+    col_status, col_btn = st.columns([3, 1])
+    with col_status:
+        if location_data:
+            try:
+                lat, lon = location_data['coords']['latitude'], location_data['coords']['longitude']
+                st.session_state['last_coords'] = f"{lat},{lon}"
+                st.markdown("🟢 **GPS ATIVO**")
+            except: st.markdown("🔴 **ERRO GPS**")
+        else: st.markdown("🟡 **BUSCANDO SINAL...**")
+    with col_btn:
+        if st.button("🔄", help="Atualizar GPS"): st.rerun()
 
-        # 2. SELETOR DE DATA
-        st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
-        c_data, _ = st.columns([1.5, 1])
-        with c_data:
-            data_selecionada = st.date_input("📅 SELECIONE A DATA", datetime.now(timezone.utc) - timedelta(hours=3))
+    # 3. SISTEMA DE ABAS DO SUPERVISOR
+    tab_missoes, tab_contratos, tab_equipe = st.tabs([
+        "🚀 MISSÕES E PRESENÇA", "📄 MEUS CONTRATOS", "📈 ACOMPANHAMENTO"
+    ])
+
+    # ==========================================
+    # ABA 1: MISSÕES (IDÊNTICA AO COLABORADOR)
+    # ==========================================
+    with tab_missoes:
+        st.markdown("<div style='margin-top: 20px;'></div>", unsafe_allow_html=True)
+        # Registro de Presença
+        st.markdown("<div style='background-color: #FFEB00; padding: 15px; border: 4px solid #1D1D1B; box-shadow: 8px 8px 0px #1D1D1B; text-align: center; margin-bottom: 25px;'><h2 style='margin:0; font-size: 1.8rem; font-style: italic; color: #1D1D1B;'>MEU REGISTRO</h2></div>", unsafe_allow_html=True)
+        c1, c2 = st.columns(2)
+        with c1:
+            if st.button("🏁 ENTRADA (CHECK-IN)", width='stretch', key="sup_in"): modal_checkin(u, agora)
+        with c2:
+            if st.button("🏁 SAÍDA (CHECK-OUT)", width='stretch', key="sup_out"): modal_checkout(u, agora)
+
+        # Missões Diárias
+        st.divider()
+        st.markdown("<div style='background-color: #FFEB00; padding: 15px; border: 4px solid #1D1D1B; box-shadow: 8px 8px 0px #1D1D1B; text-align: center; margin-bottom: 25px;'><h2 style='margin:0; font-size: 1.8rem; font-style: italic; color: #1D1D1B;'>🚀 MISSÕES DIÁRIAS</h2></div>", unsafe_allow_html=True)
         
-        data_str = data_selecionada.strftime("%d/%m/%Y")
+        t_txt = str(m.get('Tarefa_Direcionada', 'MISSÃO GERAL')).upper() if m is not None else "MISSÃO GERAL"
+        with st.container(border=True):
+            st.markdown(f"<h3 style='text-align: center; color: #1D1D1B; margin-bottom: 10px;'>🚩 MISSÃO PRIORITÁRIA</h3>", unsafe_allow_html=True)
+            st.markdown(f"<p style='text-align: center; font-weight: bold; font-size: 1.1rem; color: #E20613;'>{t_txt}</p>", unsafe_allow_html=True)
+            if st.button("CONCLUIR MISSÃO DE HOJE", width='stretch', key="sup_task_done"):
+                registrar_acao(u['ID_Usuario'], f"CONCLUIU: {t_txt}", localizacao=st.session_state.get('last_coords'))
+                st.success("MISSÃO REGISTRADA!")
 
-        # Cálculos de hoje/data selecionada
-        logs_dia = df_logs[df_logs['Data_Hora'].str.contains(data_str)]
-        ativos_dia = logs_dia[logs_dia['ID_Usuario'].isin(minha_equipe['ID_Usuario'])]
-        total_vol = len(minha_equipe)
-        num_ativos = ativos_dia[ativos_dia['Tipo_Acao'].str.contains("Check-in")]['ID_Usuario'].nunique()
-        total_acoes = len(ativos_dia)
+        # Ações de Rede
+        st.markdown("<h3 style='font-size: 1.2rem;'>📲 AÇÕES DE REDE</h3>", unsafe_allow_html=True)
+        cm1, cm2 = st.columns(2)
+        with cm1:
+            if st.button("📸 INSTAGRAM", width='stretch', key="sup_insta"):
+                registrar_acao(u['ID_Usuario'], "AÇÃO: INTERAÇÃO INSTAGRAM", localizacao=st.session_state.get('last_coords'))
+                st.markdown(f"<a href='https://www.instagram.com/maxmacieldf/' target='_blank'><div style='background-color: #1D1D1B; color: #FFEB00; text-align: center; padding: 10px; font-weight: bold; font-size: 0.8rem;'>ABRIR PERFIL ↗️</div></a>", unsafe_allow_html=True)
+        with cm2:
+            if st.button("💬 WHATSAPP", width='stretch', key="sup_whats"):
+                registrar_acao(u['ID_Usuario'], "AÇÃO: MOBILIZAÇÃO WHATSAPP", localizacao=st.session_state.get('last_coords'))
+                msg_zap = urllib.parse.quote("Salve! Vamos juntos com Max Maciel 🚀 https://www.instagram.com/maxmacieldf/")
+                st.markdown(f"<a href='https://wa.me/?text={msg_zap}' target='_blank'><div style='background-color: #1D1D1B; color: #FFEB00; text-align: center; padding: 10px; font-weight: bold; font-size: 0.8rem;'>ENVIAR P/ AMIGO ↗️</div></a>", unsafe_allow_html=True)
 
-        # Preenchimento das métricas com a ID Visual
-        espaco_metricas.markdown(f"""
-<div style="display: flex; justify-content: space-between; gap: 5px; width: 100%; margin-top: 15px; margin-bottom: 5px;">
-<div style="flex: 1; background-color: #FFFFFF; border: 2px solid #1D1D1B; box-shadow: 3px 3px 0px #1D1D1B; text-align: center; padding: 5px 2px;">
-<p style="margin: 0; font-size: 0.6rem; font-family: 'Archivo Black'; color: #666; white-space: nowrap;">EQUIPE</p>
-<p style="margin: 0; font-size: 1.2rem; font-family: 'Archivo Black'; color: #1D1D1B; line-height: 1;">{total_vol}</p>
-</div>
-<div style="flex: 1; background-color: #FFFFFF; border: 2px solid #1D1D1B; box-shadow: 3px 3px 0px #1D1D1B; text-align: center; padding: 5px 2px;">
-<p style="margin: 0; font-size: 0.6rem; font-family: 'Archivo Black'; color: #666; white-space: nowrap;">ATIVOS</p>
-<p style="margin: 0; font-size: 1.2rem; font-family: 'Archivo Black'; color: #E20613; line-height: 1;">{num_ativos}</p>
-</div>
-<div style="flex: 1; background-color: #FFFFFF; border: 2px solid #1D1D1B; box-shadow: 3px 3px 0px #1D1D1B; text-align: center; padding: 5px 2px;">
-<p style="margin: 0; font-size: 0.6rem; font-family: 'Archivo Black'; color: #666; white-space: nowrap;">AÇÕES</p>
-<p style="margin: 0; font-size: 1.2rem; font-family: 'Archivo Black'; color: #1D1D1B; line-height: 1;">{total_acoes}</p>
-</div>
-</div>
-""", unsafe_allow_html=True)
+    # ==========================================
+    # ABA 2: MEUS CONTRATOS (IDÊNTICA AO COLABORADOR)
+    # ==========================================
+    with tab_contratos:
+        st.markdown("<div style='margin-top: 20px;'></div>", unsafe_allow_html=True)
+        st.subheader("📄 MEUS DOCUMENTOS")
+        df_contratos = carregar_dados("Contratos")
+        if df_contratos is not None:
+            meus_docs = df_contratos[df_contratos['ID_Usuario'].astype(str) == str(u['ID_Usuario'])]
+            if not meus_docs.empty:
+                for _, doc in meus_docs.iterrows():
+                    with st.container(border=True):
+                        st.write(f"**Doc:** {doc['Nome_Arquivo']}")
+                        st.link_button("📥 BAIXAR ORIGINAL", doc['Link_Original'], width='stretch')
+                        arq = st.file_uploader("Upload Assinado (PDF)", type=['pdf'], key=f"sup_up_{doc['Nome_Arquivo']}")
+                        if st.button("CONFIRMAR ENVIO", key=f"sup_btn_{doc['Nome_Arquivo']}", width='stretch', type="primary"):
+                            if arq:
+                                with st.spinner("Enviando..."):
+                                    link = salvar_documento_drive(arq, f"ASSINADO_{u['Nome']}_{doc['Nome_Arquivo']}")
+                                    if link and atualizar_contrato_enviado(u['ID_Usuario'], doc['Nome_Arquivo'], link):
+                                        st.success("Enviado com sucesso!"); time.sleep(1); st.rerun()
+            else: st.info("Nenhum contrato pendente.")
 
-        st.markdown(f"<h3 style='font-size: 1.2rem; text-align: left; margin-bottom: 10px; margin-top: -15px;'>📋 STATUS ({data_str[:5]})</h3>", unsafe_allow_html=True)
-        
-        if 'Feedback' not in df_logs.columns:
-            df_logs['Feedback'] = ""
-
-        # --- LOOP DE COLABORADORES ---
-        for _, vol in minha_equipe.iterrows():
-            logs_vol_dia = df_logs[(df_logs['ID_Usuario'] == vol['ID_Usuario']) & (df_logs['Data_Hora'].str.contains(data_str))]
+    # ==========================================
+    # ABA 3: ACOMPANHAMENTO (LOGICA ANTERIOR DO SUPERVISOR)
+    # ==========================================
+    with tab_equipe:
+        st.markdown("<div style='margin-top: 20px;'></div>", unsafe_allow_html=True)
+        if df_usuarios is not None and df_logs is not None:
+            minha_equipe = df_usuarios[df_usuarios['ID_Supervisor'].astype(str) == str(u['ID_Usuario'])]
             
-            tem_checkin = not logs_vol_dia[logs_vol_dia['Tipo_Acao'].str.contains("Check-in")].empty
-            tem_redes = not logs_vol_dia[logs_vol_dia['Tipo_Acao'].str.contains("AÇÃO:")].empty
-            tem_missao = not logs_vol_dia[logs_vol_dia['Tipo_Acao'].str.contains("CONCLUIU:")].empty
+            # Métricas da Equipe
+            espaco_metricas = st.empty()
             
-            if tem_checkin and tem_missao: status_label = "🔥 COMPLETO"
-            elif tem_checkin: status_label = "🟢 EM CAMPO"
-            elif tem_redes: status_label = "🟡 REDES"
-            else: status_label = "⚪ OFF"
+            # Filtro de Data
+            c_data, _ = st.columns([1.5, 1])
+            with c_data:
+                data_sel = st.date_input("📅 DATA DE ANÁLISE", datetime.now(timezone.utc) - timedelta(hours=3))
+            d_str = data_sel.strftime("%d/%m/%Y")
 
-            with st.expander(f"{status_label} | {vol['Nome'].upper()}"):
-                if not logs_vol_dia.empty:
-                    # Itera sobre os últimos 5 logs de hoje
-                    for _, row in logs_vol_dia.tail(5)[::-1].iterrows():
-                        acao_raw = str(row['Tipo_Acao'])
-                        hora = row['Data_Hora'].split()[-1][:5]
-                        texto_limpo = acao_raw.split("|")[0].split("Foto:")[0].strip().upper()
-                        
-                        # Extração do Feedback/Clima
-                        fb = str(row.get('Feedback', '')).strip()
-                        badge_clima = ""
-                        obs_txt = ""
-                        
-                        if fb and fb.lower() != "nan":
-                            partes = fb.split("|")
-                            clima_emoji = partes[0].strip()
-                            badge_clima = f"<span style='background-color:#FFEB00; border:1px solid #000; padding:1px 4px; font-size:0.6rem; font-weight:bold; margin-left:8px;'>{clima_emoji}</span>"
-                            if len(partes) > 1 and "Nenhuma" not in partes[1]:
-                                obs_txt = partes[1].replace("Obs:", "").strip()
+            # Cálculos de Equipe
+            logs_dia = df_logs[df_logs['Data_Hora'].str.contains(d_str)]
+            ativos_dia = logs_dia[logs_dia['ID_Usuario'].isin(minha_equipe['ID_Usuario'])]
+            total_vol = len(minha_equipe)
+            num_ativos = ativos_dia[ativos_dia['Tipo_Acao'].str.contains("Check-in")]['ID_Usuario'].nunique()
+            total_acoes = len(ativos_dia)
 
-                        loc = str(row['Localização'])
-                        btn_mapa = ""
-                        if "," in loc:
-                            link = f"https://www.google.com/maps?q={loc}"
-                            btn_mapa = f"<a href='{link}' target='_blank' style='background-color:#E20613; color:#FFF; padding:2px 6px; border:1px solid #000; font-size:0.5rem; text-decoration:none; font-family:Archivo Black;'>📍 MAPA</a>"
+            espaco_metricas.markdown(f"""
+                <div style="display: flex; justify-content: space-between; gap: 5px; width: 100%; margin-bottom: 15px;">
+                    <div style="flex: 1; background: #FFF; border: 2px solid #1D1D1B; box-shadow: 3px 3px 0px #1D1D1B; text-align: center; padding: 5px;">
+                        <p style="margin: 0; font-size: 0.6rem; font-family: 'Archivo Black'; color: #666;">EQUIPE</p>
+                        <p style="margin: 0; font-size: 1.2rem; font-family: 'Archivo Black'; color: #1D1D1B;">{total_vol}</p>
+                    </div>
+                    <div style="flex: 1; background: #FFF; border: 2px solid #1D1D1B; box-shadow: 3px 3px 0px #1D1D1B; text-align: center; padding: 5px;">
+                        <p style="margin: 0; font-size: 0.6rem; font-family: 'Archivo Black'; color: #666;">ATIVOS</p>
+                        <p style="margin: 0; font-size: 1.2rem; font-family: 'Archivo Black'; color: #E20613;">{num_ativos}</p>
+                    </div>
+                    <div style="flex: 1; background: #FFF; border: 2px solid #1D1D1B; box-shadow: 3px 3px 0px #1D1D1B; text-align: center; padding: 5px;">
+                        <p style="margin: 0; font-size: 0.6rem; font-family: 'Archivo Black'; color: #666;">AÇÕES</p>
+                        <p style="margin: 0; font-size: 1.2rem; font-family: 'Archivo Black'; color: #1D1D1B;">{total_acoes}</p>
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
 
-                        # CARD DE ATIVIDADE (HTML Limpo sem recuo de margem)
-                        card_html = f"""
-<div style='background-color:#F4F4F4; border:2px solid #1D1D1B; padding:10px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; box-shadow:3px 3px 0px #1D1D1B;'>
-<div style='display:flex; flex-direction:column; text-align:left;'>
-<div style='display:flex; align-items:center;'>
-<span style='font-family:Archivo Black; font-size:0.8rem;'>{texto_limpo}</span>
-{badge_clima}
-</div>
-<span style='font-size:0.7rem; color:#666; font-weight:bold;'>🕒 {hora}</span>
-{f"<span style='font-size:0.7rem; color:#E20613; font-style:italic;'>💬 {obs_txt}</span>" if obs_txt else ""}
-</div>
-<div>{btn_mapa}</div>
-</div>
-"""
-                        st.markdown(card_html, unsafe_allow_html=True)
-                else:
-                    st.info(f"Sem atividades em {data_str[:5]}.")
+            st.markdown(f"<h3 style='font-size: 1.1rem; text-align: left; margin-top: -15px;'>📋 STATUS DA EQUIPE ({d_str[:5]})</h3>", unsafe_allow_html=True)
 
-# --- BOTÕES WHATSAPP (CORRIGIDOS PARA ABRIR DIRETO NO COLABORADOR) ---
-                st.divider()
-                w_limpo = sanitize_whatsapp(vol['WhatsApp']) # Puxa o número limpo do colaborador
-                p_nome = vol['Nome'].split()[0]
+            for _, vol in minha_equipe.iterrows():
+                logs_vol = df_logs[(df_logs['ID_Usuario'] == vol['ID_Usuario']) & (df_logs['Data_Hora'].str.contains(d_str))]
                 
-                c_wa1, c_wa2 = st.columns(2)
+                tem_in = not logs_vol[logs_vol['Tipo_Acao'].str.contains("Check-in")].empty
+                tem_net = not logs_vol[logs_vol['Tipo_Acao'].str.contains("AÇÃO:")].empty
+                tem_ok = not logs_vol[logs_vol['Tipo_Acao'].str.contains("CONCLUIU:")].empty
                 
-                with c_wa1:
-                    # 1. Define a mensagem e o rótulo baseados no status
-                    if tem_checkin and tem_missao: 
-                        b_l, msg = "🚀 PARABÉNS", f"Mandou bem, {p_nome}! Missão completa! 🔥"
-                    elif tem_checkin: 
-                        b_l, msg = "💪 MOTIVAR", f"Bora, {p_nome}! Vi que está em campo. Pra cima! 🚀"
-                    elif tem_redes: 
-                        b_l, msg = "⚡ REFORÇAR", f"Boa, {p_nome}! Vi que mobilizou as redes. Não esquece o check-in na rua! 💪"
-                    else: 
-                        b_l, msg = "⚠️ COBRAR", f"Fala, {p_nome}! Ainda não vi suas atividades hoje. Algum problema?"
+                if tem_in and tem_ok: label = "🔥 COMPLETO"
+                elif tem_in: label = "🟢 EM CAMPO"
+                elif tem_net: label = "🟡 REDES"
+                else: label = "⚪ OFF"
+
+                with st.expander(f"{label} | {vol['Nome'].upper()}"):
+                    if not logs_vol.empty:
+                        feed_html = ""
+                        for _, row in logs_vol.tail(5)[::-1].iterrows():
+                            acao_txt = str(row['Tipo_Acao']).split("|")[0].split("Foto:")[0].strip().upper()
+                            hora_txt = row['Data_Hora'].split()[-1][:5]
+                            # Clima
+                            fb = str(row.get('Feedback', '')).strip()
+                            badge = f"<span style='background-color:#FFEB00; border:1px solid #000; padding:1px 4px; font-size:0.5rem; margin-left:8px;'>{fb.split('|')[0]}</span>" if "Check-out" in row['Tipo_Acao'] and fb and fb != "nan" else ""
+                            
+                            feed_html += f"<div style='background-color:#F4F4F4; border:2px solid #1D1D1B; padding:10px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; box-shadow:3px 3px 0px #1D1D1B;'><div style='text-align:left;'><span style='font-family:Archivo Black; font-size:0.8rem;'>{acao_txt}</span>{badge}<br><span style='font-size:0.7rem; color:#666; font-weight:bold;'>🕒 {hora_txt}</span></div>"
+                            if "," in str(row['Localização']):
+                                feed_html += f"<div><a href='https://www.google.com/maps?q={row['Localização']}' target='_blank' style='background-color:#E20613; color:#FFF; padding:3px 6px; border:1px solid #000; font-size:0.5rem; text-decoration:none; font-family:Archivo Black;'>📍 MAPA</a></div>"
+                            feed_html += "</div>"
+                        st.markdown(feed_html, unsafe_allow_html=True)
                     
-                    # LINK ATUALIZADO: Agora inclui o número do colaborador (w_limpo)
-                    st.link_button(
-                        b_l, 
-                        f"https://wa.me/{w_limpo}?text={urllib.parse.quote(msg)}", 
-                        width='stretch', 
-                        type="primary"
-                    )
-                
-                with c_wa2:
-                    # LINK ATUALIZADO: Abre o chat direto com o colaborador sem mensagem
-                    st.link_button(
-                        "💬 ABRIR CHAT", 
-                        f"https://wa.me/{w_limpo}", 
-                        width='stretch'
-                    )
+                    st.divider()
+                    w_vol = sanitize_whatsapp(vol['WhatsApp'])
+                    p_vol = vol['Nome'].split()[0]
+                    c_w1, c_w2 = st.columns(2)
+                    with c_w1:
+                        if tem_in: b_n, b_m = "💪 MOTIVAR", f"Bora {p_vol}! Pra cima! 🚀"
+                        elif tem_net: b_n, b_m = "⚡ REFORÇAR", f"Boa {p_nome}! Não esquece o check-in na rua! 💪"
+                        else: b_n, b_m = "⚠️ COBRAR", f"Fala {p_vol}! Algum problema? Não vi suas ações hoje."
+                        st.link_button(b_n, f"https://api.whatsapp.com/send?text={urllib.parse.quote(b_m)}&phone={w_vol}", width='stretch', type="primary")
+                    with c_w2:
+                        st.link_button("💬 CHAT", f"https://wa.me/{w_vol}", width='stretch')
 
-        # 5. RELATÓRIO FINAL
-        st.markdown("<br>", unsafe_allow_html=True)
-        rel_msg = f"📊 *RELATÓRIO - {data_str}*\n👤 Sup: {nome_primeiro}\n👥 Equipe: {total_vol}\n🔥 Ativos: {num_ativos}\n🎯 Ações: {total_acoes}"
-        st.link_button("📲 ENVIAR RELATÓRIO P/ COORDENAÇÃO", f"https://api.whatsapp.com/send?text={urllib.parse.quote(rel_msg)}", width='stretch', type="primary")
+            # Relatório Geral para Coordenador
+            st.markdown("<br>", unsafe_allow_html=True)
+            rel_txt = f"📊 *RELATÓRIO {d_str}*\n👤 Sup: {nome_primeiro}\n👥 Equipe: {total_vol}\n🔥 Ativos: {num_ativos}\n🎯 Ações: {total_acoes}"
+            st.link_button("📲 ENVIAR RELATÓRIO P/ COORDENAÇÃO", f"https://api.whatsapp.com/send?text={urllib.parse.quote(rel_txt)}", width='stretch', type="primary")
 
+    # Rodapé de Suporte do Supervisor (Pode falar com o Admin/Suporte técnico)
+    st.markdown("<div style='margin-top: 30px;'></div>", unsafe_allow_html=True)
+    st.divider()
+    st.markdown("<h3 style='font-size: 1.2rem; text-align: left;'>🛠️ SUPORTE DE LIDERANÇA</h3>", unsafe_allow_html=True)
+    st.link_button("🛠️ REPORTAR ERRO NO APP", "https://wa.me/5561998788292?text=Erro no Painel de Supervisor", width='stretch')
 
 
 # --- PERFIL: ADMIN (COORDENAÇÃO) ---
