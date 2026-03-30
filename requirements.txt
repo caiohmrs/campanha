@@ -1,0 +1,8 @@
+streamlit
+pandas
+gspread
+google-auth
+extra-streamlit-components
+google-api-python-client
+streamlit-geolocation
+streamlit-js-eval
