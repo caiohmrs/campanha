@@ -1161,14 +1161,24 @@ elif cargo_limpo == "admin":
     df_usuarios = carregar_dados("Usuarios")
     df_logs = carregar_dados("Logs")
 
-# --- TICKER DE OPERAÇÕES ANIMADO (VERSÃO INTEGRADA - AMARELO) ---
+# --- TICKER DE OPERAÇÕES ANIMADO (VERSÃO NOME REAL) ---
     if not df_logs.empty:
-        ultimos_logs_ticker = df_logs.tail(10)[::-1]
+        # 1. Pega os últimos 10 logs
+        ultimos_logs_raw = df_logs.tail(10)
+
+        # 2. Faz o cruzamento (merge) para buscar o Nome real do voluntário
+        # df_usuarios já deve estar carregado no seu bloco de Admin
+        df_ticker = pd.merge(ultimos_logs_raw, df_usuarios[['ID_Usuario', 'Nome']], on='ID_Usuario', how='left')
         
+        # 3. Fallback: se não encontrar o nome na planilha, usa o ID (e-mail)
+        df_ticker['Nome'] = df_ticker['Nome'].fillna(df_ticker['ID_Usuario'])
+
+        # 4. Monta a frase usando o primeiro nome de cada um
         frase_ticker = "  ///  ".join([
-            f"⚡ {str(row['Nome']).split('@')[0].upper()}: {str(row['Tipo_Acao']).split('|')[0].strip().upper()}"
-            for _, row in ultimos_logs_ticker.iterrows()
+            f"⚡ {str(row['Nome']).split()[0].upper()}: {str(row['Tipo_Acao']).split('|')[0].strip().upper()}"
+            for _, row in df_ticker[::-1].iterrows()
         ])
+        
         conteudo_duplicado = f"{frase_ticker} /// {frase_ticker}"
 
         st.markdown(f"""
@@ -1180,7 +1190,7 @@ elif cargo_limpo == "admin":
                 .ticker-container {{
                     width: 100%;
                     overflow: hidden;
-                    background: #FFEB00; /* Fundo Amarelo */
+                    background: #FFEB00;
                     border-top: 3px solid #1D1D1B;
                     border-bottom: 3px solid #1D1D1B;
                     padding: 8px 0;
@@ -1190,10 +1200,10 @@ elif cargo_limpo == "admin":
                 }}
                 .ticker-content {{
                     display: inline-block;
-                    animation: scroll 60s linear infinite;
+                    animation: scroll 45s linear infinite;
                     font-family: 'Archivo Black', sans-serif;
                     font-size: 0.9rem;
-                    color: #1D1D1B; /* Texto Preto */
+                    color: #1D1D1B;
                     font-style: italic;
                     text-transform: uppercase;
                 }}
