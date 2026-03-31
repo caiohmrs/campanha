@@ -1166,7 +1166,7 @@ elif cargo_limpo == "admin":
         ultimos_logs_ticker = df_logs.tail(10)[::-1]
         
         frase_ticker = "  ///  ".join([
-            f"⚡ {str(row['ID_Usuario']).split('@')[0].upper()}: {str(row['Tipo_Acao']).split('|')[0].strip().upper()}"
+            f"⚡ {str(row['Nome']).split('@')[0].upper()}: {str(row['Tipo_Acao']).split('|')[0].strip().upper()}"
             for _, row in ultimos_logs_ticker.iterrows()
         ])
         conteudo_duplicado = f"{frase_ticker} /// {frase_ticker}"
