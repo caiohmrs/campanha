@@ -1224,17 +1224,18 @@ elif cargo_limpo == "admin":
     ])
 
 # ==========================================
-    # ABA 1: ESTRUTURA DE EQUIPES (GRID DESKTOP CORRIGIDO)
+    # ABA 1: ESTRUTURA DE EQUIPES (DESKTOP GRID - VERSÃO BLINDADA)
     # ==========================================
     with tab_hierarquia:
         st.markdown("<h2 style='font-family: \"Archivo Black\", sans-serif; color: #1D1D1B; margin-bottom: 25px; font-size: 2rem;'>ESTRUTURA DE EQUIPES</h2>", unsafe_allow_html=True)
         
-        df_usuarios = carregar_dados("Usuarios")
-        df_logs = carregar_dados("Logs")
+        # Recarregamos os dados para garantir que o WhatsApp esteja presente
+        df_usuarios_raw = carregar_dados("Usuarios")
         df_grupos_info = carregar_dados("Grupos")
 
-        if df_usuarios is not None and df_grupos_info is not None:
-            df_gerencial = pd.merge(df_usuarios, df_grupos_info, on='ID_Grupo', how='left')
+        if df_usuarios_raw is not None and df_grupos_info is not None:
+            # Fazemos o merge, mas garantimos que a coluna WhatsApp não seja perdida ou renomeada
+            df_gerencial = pd.merge(df_usuarios_raw, df_grupos_info, on='ID_Grupo', how='left')
             df_gerencial['Macro_Grupo'] = df_gerencial['Macro_Grupo'].fillna("GERAL")
 
             # Filtro de Macro Região
@@ -1252,14 +1253,11 @@ elif cargo_limpo == "admin":
             if supervisores.empty:
                 st.warning("Nenhum supervisor nesta região.")
             else:
-                # 1. CRIAMOS AS COLUNAS TOTAIS DO MONITOR
                 col_sup1, col_sup2 = st.columns(2, gap="large")
                 
                 for i, (_, sup) in enumerate(supervisores.iterrows()):
-                    # Escolhe a coluna da vez
                     col_alvo = col_sup1 if i % 2 == 0 else col_sup2
                     
-                    # --- TUDO A PARTIR DAQUI PRECISA ESTAR DENTRO DO 'WITH COL_ALVO' ---
                     with col_alvo:
                         equipe = df_f_admin[df_f_admin['ID_Supervisor'].astype(str).str.strip() == str(sup['ID_Usuario']).strip()]
                         qtd_equipe = len(equipe)
@@ -1269,8 +1267,8 @@ elif cargo_limpo == "admin":
                         ativos_hoje = logs_eq[logs_eq['Tipo_Acao'].str.contains("Check-in")]['ID_Usuario'].nunique()
                         cor_ativos = "#E20613" if ativos_hoje > 0 else "#666666"
 
-                        # A. CARD HTML (Título, Grupo e Números)
-                        card_html = f"""
+                        # A. CARD HTML
+                        st.markdown(f"""
                             <div style='background-color: #FFFFFF; border: 4px solid #1D1D1B; box-shadow: 6px 6px 0px #1D1D1B; padding: 20px; margin-bottom: 12px;'>
                                 <div style='border-bottom: 3px solid #1D1D1B; padding-bottom: 12px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;'>
                                     <div>
@@ -1290,27 +1288,32 @@ elif cargo_limpo == "admin":
                                     </div>
                                 </div>
                             </div>
-                        """
-                        st.markdown(card_html, unsafe_allow_html=True)
+                        """, unsafe_allow_html=True)
                         
                         # B. BOTÕES LADO A LADO (CHAT E GRUPO)
-                        w_sup = sanitize_whatsapp(sup['WhatsApp'])
+                        # Busca o WhatsApp de forma segura, tratando se vier como NaN ou Vazio
+                        raw_w_sup = str(sup.get('WhatsApp', '')).strip()
+                        w_sup_limpo = sanitize_whatsapp(raw_w_sup)
                         link_grp = str(sup.get('Link_Grupo', '')).strip()
                         
                         c_wa1, c_wa2 = st.columns(2)
                         with c_wa1:
-                            st.link_button(f"👤 CHAT: {sup['Nome'].split()[0].upper()}", f"https://wa.me/{w_sup}", width="stretch")
+                            if w_sup_limpo:
+                                st.link_button(f"👤 CHAT: {sup['Nome'].split()[0].upper()}", f"https://wa.me/{w_sup_limpo}", width="stretch")
+                            else:
+                                st.button("👤 SEM WHATSAPP", disabled=True, width="stretch", key=f"no_wa_{sup['ID_Usuario']}")
+                                
                         with c_wa2:
                             if link_grp and "chat.whatsapp" in link_grp:
                                 st.link_button("📢 GRUPO", f"{link_grp}#{sup['ID_Usuario']}", width="stretch")
                             else:
                                 st.button("🚫 SEM LINK", disabled=True, width="stretch", key=f"no_link_{sup['ID_Usuario']}")
 
-                        # C. EXPANDER DE INTEGRANTES (DENTRO DA COLUNA)
+                        # C. EXPANDER DE INTEGRANTES
                         with st.expander(f"👥 LISTA DE INTEGRANTES ({qtd_equipe})"):
                             if not equipe.empty:
                                 for _, vol in equipe.iterrows():
-                                    w_vol = sanitize_whatsapp(vol['WhatsApp'])
+                                    w_vol = sanitize_whatsapp(vol.get('WhatsApp', ''))
                                     st.markdown(f"""
                                         <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #ddd; padding: 8px 0;">
                                             <span style="font-size: 0.9rem; font-weight: bold; color: #1D1D1B;">{vol['Nome'].upper()}</span>
