@@ -1586,7 +1586,7 @@ elif cargo_limpo == "admin":
                     
                     user_selecionado_display = st.selectbox("PARA QUEM É O CONTRATO?", options=lista_nomes_contrato)
                     
-                    n_doc = st.text_input("NOME DO DOCUMENTO:", placeholder="Ex: Termo_de_Adesao_V1")
+                    n_doc = st.text_input("NOME DO DOCUMENTO:", placeholder="Ex: Contrato_NomeSobrenome_Data")
                     arq_pdf = st.file_uploader("ARQUIVO PDF:", type=['pdf'])
                     
                     if st.form_submit_button("🚀 ENVIAR AGORA", width='stretch', type="primary"):
