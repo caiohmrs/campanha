@@ -462,41 +462,46 @@ def atualizar_contrato_enviado(id_usuario, nome_arquivo, link_drive):
         return False
 
 def sanitize_whatsapp(v: str) -> str:
-    """Limpa o número, corrige erro de float (.0) e garante o formato 55 + DDD + 9 + Número"""
-    if v is None or str(v).lower() == "nan" or str(v).strip() == "":
+    """
+    Limpa e formata números de WhatsApp brasileiros.
+    Lida com: (61) 9999-9999, 556199999999, 6199999999.0, +55 61 9999 9999, etc.
+    """
+    if v is None or str(v).lower() in ["nan", "none", ""]:
         return ""
     
-    # 1. Transforma em string e remove o ".0" que o Excel/Pandas coloca em números
-    s = str(v).strip()
-    if s.endswith(".0"):
-        s = s[:-2]
+    # 1. Limpeza inicial: transforma em string e remove o ".0" (artefato de floats do Excel)
+    s = str(v).strip().split('.')[0]
     
-    # 2. Mantém apenas os dígitos (remove +, -, espaços e parênteses)
+    # 2. Mantém apenas os dígitos (remove espaços, -, (), +, etc)
     nums = "".join(filter(str.isdigit, s))
     
-    # 3. CORREÇÃO DE ERRO DE FLOAT (O zero extra no final)
-    # Se o número tem 12 dígitos, termina em 0 e NÃO começa com 55, 
-    # é quase certeza que o zero final é o ".0" que virou "0".
-    if len(nums) == 12 and nums.endswith("0") and not nums.startswith("55"):
-        nums = nums[:-1]
+    # 3. Identifica o "núcleo" (DDD + Número)
+    # Se começar com 55 e tiver 12 ou 13 dígitos, removemos o 55 para analisar o resto
+    if nums.startswith("55") and len(nums) >= 12:
+        core = nums[2:]
+    else:
+        core = nums
 
-    # 4. GARANTIR O 55 (BRASIL) E O 9 (CELULAR)
-    # Se o número tem 11 dígitos (DDD + 9 + 8 dígitos), só adiciona o 55
-    if len(nums) == 11:
-        return "55" + nums
-    
-    # Se o número tem 10 dígitos (DDD + 8 dígitos), falta o 55 e o 9
-    if len(nums) == 10:
-        return "55" + nums[:2] + "9" + nums[2:]
-    
-    # Se o número já começa com 55
-    if nums.startswith("55"):
-        # Se tem 12 dígitos (55 + DDD + 8 dígitos), falta o 9
-        if len(nums) == 12:
-            return "55" + nums[2:4] + "9" + nums[4:]
-        return nums
+    # 4. Remove zero à esquerda do DDD (ex: 061 -> 61)
+    if core.startswith("0"):
+        core = core[1:]
 
-    return nums
+    # 5. Tratamento do 9º dígito
+    # Caso A: DDD + 8 dígitos (ex: 6188887777 -> len 10)
+    if len(core) == 10:
+        # Inserimos o 9 após o DDD
+        core = core[:2] + "9" + core[2:]
+    
+    # Caso B: DDD + 9 dígitos (ex: 61988887777 -> len 11)
+    # Já está correto.
+
+    # 6. Resultado final: Se o núcleo tem 11 dígitos, adicionamos o 55 e retornamos
+    if len(core) == 11:
+        return "55" + core
+
+    # Caso o número não se encaixe em nenhum padrão brasileiro conhecido (muito curto ou longo demais)
+    # retornamos os dígitos originais se tiverem um tamanho mínimo, ou vazio
+    return nums if len(nums) >= 10 else ""
 
 def obter_endereco_simples(coords_str):
     """Converte 'lat, lon' em um endereço curto (Rua ou Bairro)"""
