@@ -1223,67 +1223,103 @@ elif cargo_limpo == "admin":
         "👥 EQUIPES", "📊 DASHBOARD", "🗺️ MAPA", "📝 MISSÕES", "➕ CADASTRO", "📄 CONTRATOS"
     ])
 
-    # ==========================================
-    # ABA 1: ESTRUTURA DE EQUIPES
+# ==========================================
+    # ABA 1: ESTRUTURA DE EQUIPES (FILTRO SELECTBOX)
     # ==========================================
     with tab_hierarquia:
         st.markdown("<h2 style='font-family: \"Archivo Black\", sans-serif; color: #1D1D1B; margin-bottom: 25px; font-size: 2rem;'>ESTRUTURA DE EQUIPES</h2>", unsafe_allow_html=True)
         
-        supervisores = df_usuarios[df_usuarios['Cargo'].str.lower().str.strip() == "supervisor"]
-        
-        if supervisores.empty:
-            st.warning("Nenhum supervisor encontrado.")
-        else:
-            col_sup1, col_sup2 = st.columns(2, gap="large")
-            
-            for i, (_, sup) in enumerate(supervisores.iterrows()):
-                col_alvo = col_sup1 if i % 2 == 0 else col_sup2
-                
-                with col_alvo:
-                    equipe = df_usuarios[df_usuarios['ID_Supervisor'].astype(str).str.strip() == str(sup['ID_Usuario']).strip()]
-                    qtd_equipe = len(equipe)
-                    logs_eq = df_logs[(df_logs['ID_Usuario'].isin(equipe['ID_Usuario'])) & (df_logs['Data_Hora'].str.contains(hoje_str))]
-                    ativos_hoje = logs_eq[logs_eq['Tipo_Acao'].str.contains("Check-in")]['ID_Usuario'].nunique()
-                    cor_ativos = "#E20613" if ativos_hoje > 0 else "#666666"
+        df_usuarios = carregar_dados("Usuarios")
+        df_logs = carregar_dados("Logs")
+        df_grupos_info = carregar_dados("Grupos")
 
-                    # CARD DO SUPERVISOR (Construção contínua para não vazar código)
-                    card_html = ""
-                    card_html += "<div style='background-color: #FFFFFF; border: 4px solid #1D1D1B; box-shadow: 6px 6px 0px #1D1D1B; padding: 20px; margin-bottom: 12px;'>"
-                    card_html += "<div style='border-bottom: 3px solid #1D1D1B; padding-bottom: 12px; margin-bottom: 20px;'>"
-                    card_html += f"<h3 style='margin: 0; font-family: \"Archivo Black\", sans-serif; font-size: 1.5rem; color: #E20613; text-transform: uppercase;'>{sup['Nome']}</h3>"
-                    card_html += f"<span style='background-color: #FFEB00; border: 2px solid #1D1D1B; padding: 4px 10px; font-family: \"Archivo Black\", sans-serif; font-size: 0.8rem; color: #1D1D1B;'>GRUPO: {sup['ID_Grupo']}</span>"
-                    card_html += "</div>"
-                    card_html += "<div style='display: flex; gap: 15px;'>"
-                    card_html += "<div style='flex: 1; background-color: #F4F4F4; border: 2px solid #1D1D1B; padding: 12px; text-align: center;'>"
-                    card_html += "<div style='font-family: \"Archivo Black\", sans-serif; font-size: 0.85rem; color: #666;'>EQUIPE</div>"
-                    card_html += f"<div style='font-family: \"Archivo Black\", sans-serif; font-size: 2.2rem; color: #1D1D1B; line-height: 1; margin-top: 5px;'>{qtd_equipe}</div>"
-                    card_html += "</div>"
-                    card_html += "<div style='flex: 1; background-color: #F4F4F4; border: 2px solid #1D1D1B; padding: 12px; text-align: center;'>"
-                    card_html += "<div style='font-family: \"Archivo Black\", sans-serif; font-size: 0.85rem; color: #666;'>ATIVOS</div>"
-                    card_html += f"<div style='font-family: \"Archivo Black\", sans-serif; font-size: 2.2rem; color: {cor_ativos}; line-height: 1; margin-top: 5px;'>{ativos_hoje}</div>"
-                    card_html += "</div>"
-                    card_html += "</div>"
-                    card_html += "</div>"
+        if df_usuarios is not None and df_grupos_info is not None:
+            # Cruzamos os dados para ter o Macro_Grupo
+            df_gerencial = pd.merge(df_usuarios, df_grupos_info, on='ID_Grupo', how='left')
+            df_gerencial['Macro_Grupo'] = df_gerencial['Macro_Grupo'].fillna("GERAL")
+
+            # --- NOVO FILTRO ESTILO ADESIVO (SELECTBOX) ---
+            macros_existentes = sorted(df_gerencial['Macro_Grupo'].unique().tolist())
+            
+            st.markdown("<p style='font-family: \"Archivo Black\", sans-serif; font-size: 0.9rem; margin-bottom: 5px;'>📍 SELECIONE A MACRO REGIÃO:</p>", unsafe_allow_html=True)
+            
+            macro_selecionada = st.selectbox(
+                "FILTRO_MACRO_ADMIN",
+                ["TODAS AS REGIÕES"] + macros_existentes,
+                label_visibility="collapsed" # Deixa o visual limpo como no seu exemplo
+            )
+
+            # Aplica o filtro baseado na seleção única
+            if macro_selecionada == "TODAS AS REGIÕES":
+                df_filtrado_admin = df_gerencial.copy()
+            else:
+                df_filtrado_admin = df_gerencial[df_gerencial['Macro_Grupo'] == macro_selecionada]
+            
+            # Filtramos os supervisores
+            supervisores = df_filtrado_admin[df_filtrado_admin['Cargo'].str.lower().str.strip() == "supervisor"]
+            
+            if supervisores.empty:
+                st.warning("Nenhum supervisor encontrado nesta região.")
+            else:
+                # Grid de 2 colunas para PC
+                col_sup1, col_sup2 = st.columns(2, gap="large")
+                
+                for i, (_, sup) in enumerate(supervisores.iterrows()):
+                    col_alvo = col_sup1 if i % 2 == 0 else col_sup2
                     
-                    st.markdown(card_html, unsafe_allow_html=True)
-                    
-                    # Botão de Chat
-                    w_sup = sanitize_whatsapp(sup['WhatsApp'])
-                    st.link_button(f"💬 CHAT: {sup['Nome'].split()[0].upper()}", f"https://wa.me/{w_sup}", width='stretch')
-                    
-                    with st.expander(f"👥 LISTA DE COLABORADORES"):
-                        if not equipe.empty:
-                            lista_html = "<div style='display: flex; flex-direction: column; gap: 10px;'>"
-                            for _, vol in equipe.iterrows():
-                                tem_log = not logs_eq[logs_eq['ID_Usuario'] == vol['ID_Usuario']].empty
-                                status_ico = "🟢" if tem_log else "⚪"
-                                w_vol = sanitize_whatsapp(vol['WhatsApp'])
-                                lista_html += f"<div style='display: flex; justify-content: space-between; align-items: center; background-color: #F4F4F4; border: 2px solid #1D1D1B; padding: 12px;'>"
-                                lista_html += f"<div style='line-height: 1.3;'><span style='font-family: \"Archivo Black\", sans-serif; font-size: 1rem; color: #1D1D1B;'>{status_ico} {vol['Nome'].upper()}</span><br><span style='font-size: 0.8rem; color: #666; font-weight: bold;'>ID: {vol['ID_Usuario']}</span></div>"
-                                lista_html += f"<a href='https://wa.me/{w_vol}' target='_blank' style='background-color: #25D366; color: #FFFFFF; font-family: \"Archivo Black\", sans-serif; font-size: 0.8rem; padding: 8px 15px; border: 2px solid #1D1D1B; box-shadow: 2px 2px 0px #1D1D1B; text-decoration: none; text-transform: uppercase; white-space: nowrap;'>CHAMAR</a>"
+                    with col_alvo:
+                        equipe = df_filtrado_admin[df_filtrado_admin['ID_Supervisor'].astype(str).str.strip() == str(sup['ID_Usuario']).strip()]
+                        qtd_equipe = len(equipe)
+                        
+                        # Ativos hoje
+                        logs_eq = df_logs[(df_logs['ID_Usuario'].isin(equipe['ID_Usuario'])) & (df_logs['Data_Hora'].str.contains(hoje_str))]
+                        ativos_hoje = logs_eq[logs_eq['Tipo_Acao'].str.contains("Check-in")]['ID_Usuario'].nunique()
+                        cor_ativos = "#E20613" if ativos_hoje > 0 else "#666666"
+
+                        # Card Brutalista
+                        card_html = ""
+                        card_html += "<div style='background-color: #FFFFFF; border: 4px solid #1D1D1B; box-shadow: 8px 8px 0px #1D1D1B; padding: 20px; margin-bottom: 12px;'>"
+                        card_html += "<div style='border-bottom: 3px solid #1D1D1B; padding-bottom: 12px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;'>"
+                        card_html += "<div>"
+                        card_html += f"<h3 style='margin: 0; font-family: \"Archivo Black\", sans-serif; font-size: 1.5rem; color: #E20613; text-transform: uppercase;'>{sup['Nome']}</h3>"
+                        card_html += f"<span style='font-size: 0.8rem; color: #666; font-weight: bold; text-transform: uppercase;'>MACRO: {sup['Macro_Grupo']}</span>"
+                        card_html += "</div>"
+                        card_html += f"<span style='background-color: #FFEB00; border: 2px solid #1D1D1B; padding: 4px 10px; font-family: \"Archivo Black\", sans-serif; font-size: 0.8rem; color: #1D1D1B;'>{sup['ID_Grupo']}</span>"
+                        card_html += "</div>"
+                        card_html += "<div style='display: flex; gap: 15px;'>"
+                        card_html += "<div style='flex: 1; background-color: #F4F4F4; border: 2px solid #1D1D1B; padding: 12px; text-align: center;'>"
+                        card_html += "<div style='font-family: \"Archivo Black\", sans-serif; font-size: 0.85rem; color: #666;'>EQUIPE</div>"
+                        card_html += f"<div style='font-family: \"Archivo Black\", sans-serif; font-size: 2.2rem; color: #1D1D1B; line-height: 1; margin-top: 5px;'>{qtd_equipe}</div>"
+                        card_html += "</div>"
+                        card_html += "<div style='flex: 1; background-color: #F4F4F4; border: 2px solid #1D1D1B; padding: 12px; text-align: center;'>"
+                        card_html += "<div style='font-family: \"Archivo Black\", sans-serif; font-size: 0.85rem; color: #666;'>ATIVOS</div>"
+                        card_html += f"<div style='font-family: \"Archivo Black\", sans-serif; font-size: 2.2rem; color: {cor_ativos}; line-height: 1; margin-top: 5px;'>{ativos_hoje}</div>"
+                        card_html += "</div>"
+                        card_html += "</div>"
+                        card_html += "</div>"
+                        
+                        st.markdown(card_html, unsafe_allow_html=True)
+                        
+                        # Botão de Chat
+                        w_sup = sanitize_whatsapp(sup['WhatsApp'])
+                        st.link_button(f"💬 CHAT: {sup['Nome'].split()[0].upper()}", f"https://wa.me/{w_sup}", width='stretch')
+                        
+                        with st.expander(f"👥 LISTA DE INTEGRANTES ({qtd_equipe})"):
+                            if not equipe.empty:
+                                lista_html = "<div style='display: flex; flex-direction: column; gap: 10px;'>"
+                                for _, vol in equipe.iterrows():
+                                    tem_log = not logs_eq[logs_eq['ID_Usuario'] == vol['ID_Usuario']].empty
+                                    status_ico = "🟢" if tem_log else "⚪"
+                                    w_vol = sanitize_whatsapp(vol['WhatsApp'])
+                                    
+                                    lista_html += f"<div style='display: flex; justify-content: space-between; align-items: center; background-color: #F4F4F4; border: 2px solid #1D1D1B; padding: 12px;'>"
+                                    lista_html += f"<div style='line-height: 1.3;'><span style='font-family: \"Archivo Black\", sans-serif; font-size: 1rem; color: #1D1D1B;'>{status_ico} {vol['Nome'].upper()}</span><br><span style='font-size: 0.8rem; color: #666; font-weight: bold;'>ID: {vol['ID_Usuario']}</span></div>"
+                                    lista_html += f"<a href='https://wa.me/{w_vol}' target='_blank' style='background-color: #25D366; color: #FFFFFF; font-family: \"Archivo Black\", sans-serif; font-size: 0.8rem; padding: 8px 15px; border: 2px solid #1D1D1B; box-shadow: 2px 2px 0px #1D1D1B; text-decoration: none; text-transform: uppercase; white-space: nowrap;'>CHAMAR</a>"
+                                    lista_html += "</div>"
                                 lista_html += "</div>"
-                            lista_html += "</div>"
-                            st.markdown(lista_html, unsafe_allow_html=True)
+                                st.markdown(lista_html, unsafe_allow_html=True)
+                        
+                        st.markdown("<br>", unsafe_allow_html=True)
 
 # ==========================================
     # ABA 2: MENSAGENS E MISSÕES (AJUSTADO P/ 4 COLUNAS)
@@ -1543,35 +1579,55 @@ elif cargo_limpo == "admin":
                             except Exception as e: st.error(f"Erro: {e}")
                         else: st.error("⚠️ PREENCHA TODOS OS CAMPOS!")
 
-            # --- SEÇÃO 2: NOVO GRUPO ---
+# --- SEÇÃO 2: NOVO GRUPO ---
             st.markdown("<h2 style='font-family: \"Archivo Black\", sans-serif; color: #1D1D1B; margin-bottom: 20px; font-size: 1.8rem;'>🚩 CRIAR NOVO GRUPO</h2>", unsafe_allow_html=True)
             
             with st.container(border=True):
-                st.info("💡 Ao criar o grupo aqui, ele ficará disponível para seleção no cadastro de usuários.")
+                # Formulário com rótulos ocultos para controle total do alinhamento
                 with st.form("form_novo_grupo_v2", clear_on_submit=True):
-                    g_nome = st.text_input("NOME DO GRUPO (Ex: CEILANDIA_CENTRO):").strip().upper()
                     
-                    if st.form_submit_button("➕ REGISTRAR GRUPO NO SISTEMA", width='stretch'):
+                    c_g1, c_g2 = st.columns(2, gap="medium")
+                    
+                    with c_g1:
+                        st.markdown("<p style='font-family: \"Archivo Black\", sans-serif; font-size: 0.9rem; margin-bottom: 8px; color: #1D1D1B;'>NOME DO MICRO-GRUPO (EX: PSUL):</p>", unsafe_allow_html=True)
+                        g_nome = st.text_input("NOME_OCULTO", placeholder="DIGITE O NOME", label_visibility="collapsed")
+                    
+                    with c_g2:
+                        st.markdown("<p style='font-family: \"Archivo Black\", sans-serif; font-size: 0.9rem; margin-bottom: 8px; color: #1D1D1B;'>MACRO GRUPO (REGIÃO):</p>", unsafe_allow_html=True)
+                        opcoes_macro = [
+                            "CEILÂNDIA/SOL NASCENTE",
+                            "TAGUATINGA/SAMAMBAIA",
+                            "GAMA/SANTA MARIA",
+                            "PLANALTINA / LADO NORTE",
+                            "PLANO/UNB",
+                            "GABINETE",
+                            "MOVIMENTOS",
+                            "VOLUNTÁRIOS"
+                        ]
+                        g_macro = st.selectbox("MACRO_OCULTO", options=opcoes_macro, label_visibility="collapsed")
+                    
+                    st.markdown("<div style='margin-top: 25px;'></div>", unsafe_allow_html=True)
+                    
+                    # Botão com estilo de impacto
+                    if st.form_submit_button("➕ REGISTRAR GRUPO NO SISTEMA", width='stretch', type="primary"):
                         if g_nome:
                             try:
                                 client = _get_gspread_client()
                                 plan = client.open_by_key(st.secrets["planilha"]["id"])
+                                plan.worksheet("Grupos").append_row([g_nome.upper(), g_macro])
                                 
-                                # 1. Adiciona na aba 'Grupos' (para os seletores)
-                                plan.worksheet("Grupos").append_row([g_nome])
+                                # Linha de boas-vindas na aba Mensagens
+                                data_atual_msg = (datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=3)).strftime("%d/%m/%Y")
+                                plan.worksheet("Mensagens").append_row([g_nome.upper(), "BEM-VINDO AO COMANDO!", "MISSÃO INICIAL DE RUA", data_atual_msg])
                                 
-                                # 2. Cria uma entrada inicial na aba 'Mensagens' (para evitar erros de briefing vazio)
-                                plan.worksheet("Mensagens").append_row([g_nome, "BEM-VINDO!", "", "", "MISSÃO INICIAL", ""])
-                                
-                                st.success(f"✅ GRUPO {g_nome} CRIADO COM SUCESSO!")
+                                st.success(f"✅ GRUPO {g_nome.upper()} CRIADO!")
                                 st.cache_data.clear()
                                 time.sleep(1)
                                 st.rerun()
-                            except Exception as e: st.error(f"Erro ao criar grupo: {e}")
-                        else: st.error("⚠️ DIGITE UM NOME PARA O GRUPO!")
-        else:
-            st.error("Certifique-se de que as abas 'Usuarios' e 'Grupos' existem na sua planilha.")
-
+                            except Exception as e: 
+                                st.error(f"Erro: {e}")
+                        else:
+                            st.error("⚠️ DIGITE O NOME DO MICRO-GRUPO!")
 # ==========================================
     # ABA 5: MAPA DE OPERAÇÕES (SELETOR INDEPENDENTE)
     # ==========================================
