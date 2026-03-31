@@ -781,27 +781,45 @@ if cargo_limpo == "colaborador":
                     </a>
                 """, unsafe_allow_html=True)
 
-    with tab_contratos:
-        st.subheader("📄 Meus Documentos")
-        df_contratos = carregar_dados("Contratos")
-        if df_contratos is not None:
-            meus_docs = df_contratos[df_contratos['ID_Usuario'].astype(str) == str(u['ID_Usuario'])]
-            if not meus_docs.empty:
-                for _, doc in meus_docs.iterrows():
-                    with st.container(border=True):
-                        st.write(f"**Doc:** {doc['Nome_Arquivo']}")
-                        st.link_button("📥 Baixar Original", doc['Link_Original'], width='stretch')
-                        arq = st.file_uploader("Upload Assinado (PDF)", type=['pdf'], key=f"up_{doc['Nome_Arquivo']}")
-                        if st.button("Confirmar Envio", key=f"btn_{doc['Nome_Arquivo']}", width='stretch', type="primary"):
-                            if arq:
-                                with st.spinner("Enviando..."):
-                                    link = salvar_documento_drive(arq, f"ASSINADO_{u['Nome']}_{doc['Nome_Arquivo']}")
-                                    if link and atualizar_contrato_enviado(u['ID_Usuario'], doc['Nome_Arquivo'], link):
-                                        st.success("Enviado com sucesso!")
-                                        time.sleep(1)
-                                        st.rerun()
-            else:
-                st.info("Nenhum contrato pendente.")
+        with tab_contratos:
+                st.markdown("<div style='margin-top: 20px;'></div>", unsafe_allow_html=True)
+                
+                # --- NOVO: BLOCO DE SOLICITAÇÃO DE CONTRATO ---
+                st.markdown("""
+                    <div style='background-color: #FFEB00; padding: 15px; border: 4px solid #1D1D1B; box-shadow: 8px 8px 0px #1D1D1B; text-align: center; margin-bottom: 20px;'>
+                        <h2 style='margin:0; font-size: 1.3rem; font-family: "Archivo Black", sans-serif; font-style: italic; color: #1D1D1B;'>📝 NOVO CONTRATO</h2>
+                        <p style='margin:5px 0 0 0; font-size: 0.9rem; font-weight: bold;'>VOCÊ AINDA NÃO GEROU SEU CONTRATO?</p>
+                    </div>
+                """, unsafe_allow_html=True)
+                
+                # Link para o formulário (Substitua o link abaixo pelo seu link real)
+                url_formulario = "https://forms.gle/9fqxvN8XfCmTRh9EA" 
+                
+                st.link_button("📋 PREENCHER DADOS PARA GERAR CONTRATO", url_formulario, width='stretch', type="primary")
+                
+                st.markdown("<div style='margin-top: 30px;'></div>", unsafe_allow_html=True)
+                st.divider()
+        
+                st.subheader("📄 Meus Documentos")
+                df_contratos = carregar_dados("Contratos")
+                if df_contratos is not None:
+                    meus_docs = df_contratos[df_contratos['ID_Usuario'].astype(str) == str(u['ID_Usuario'])]
+                    if not meus_docs.empty:
+                        for _, doc in meus_docs.iterrows():
+                            with st.container(border=True):
+                                st.write(f"**Doc:** {doc['Nome_Arquivo']}")
+                                st.link_button("📥 Baixar Original", doc['Link_Original'], width='stretch')
+                                arq = st.file_uploader("Upload Assinado (PDF)", type=['pdf'], key=f"up_{doc['Nome_Arquivo']}")
+                                if st.button("Confirmar Envio", key=f"btn_{doc['Nome_Arquivo']}", width='stretch', type="primary"):
+                                    if arq:
+                                        with st.spinner("Enviando..."):
+                                            link = salvar_documento_drive(arq, f"ASSINADO_{u['Nome']}_{doc['Nome_Arquivo']}")
+                                            if link and atualizar_contrato_enviado(u['ID_Usuario'], doc['Nome_Arquivo'], link):
+                                                st.success("Enviado com sucesso!")
+                                                time.sleep(1)
+                                                st.rerun()
+                    else:
+                        st.info("Nenhum contrato pendente.")
 
     # --- RODAPÉ DE SUPORTE (FORA DAS ABAS) ---
     st.markdown("<div style='margin-top: 30px;'></div>", unsafe_allow_html=True)
@@ -917,29 +935,45 @@ elif cargo_limpo == "supervisor":
                 msg_zap = urllib.parse.quote("Salve! Vamos juntos com Max Maciel 🚀 https://www.instagram.com/maxmacieldf/")
                 st.markdown(f"<a href='https://wa.me/?text={msg_zap}' target='_blank'><div style='background-color: #1D1D1B; color: #FFEB00; text-align: center; padding: 10px; font-weight: bold; font-size: 0.8rem;'>ENVIAR P/ AMIGO ↗️</div></a>", unsafe_allow_html=True)
 
-    # ==========================================
-    # ABA 2: MEUS CONTRATOS (IDÊNTICA AO COLABORADOR)
-    # ==========================================
-    with tab_contratos:
-        st.markdown("<div style='margin-top: 20px;'></div>", unsafe_allow_html=True)
-        st.subheader("📄 MEUS DOCUMENTOS")
-        df_contratos = carregar_dados("Contratos")
-        if df_contratos is not None:
-            meus_docs = df_contratos[df_contratos['ID_Usuario'].astype(str) == str(u['ID_Usuario'])]
-            if not meus_docs.empty:
-                for _, doc in meus_docs.iterrows():
-                    with st.container(border=True):
-                        st.write(f"**Doc:** {doc['Nome_Arquivo']}")
-                        st.link_button("📥 BAIXAR ORIGINAL", doc['Link_Original'], width='stretch')
-                        arq = st.file_uploader("Upload Assinado (PDF)", type=['pdf'], key=f"sup_up_{doc['Nome_Arquivo']}")
-                        if st.button("CONFIRMAR ENVIO", key=f"sup_btn_{doc['Nome_Arquivo']}", width='stretch', type="primary"):
-                            if arq:
-                                with st.spinner("Enviando..."):
-                                    link = salvar_documento_drive(arq, f"ASSINADO_{u['Nome']}_{doc['Nome_Arquivo']}")
-                                    if link and atualizar_contrato_enviado(u['ID_Usuario'], doc['Nome_Arquivo'], link):
-                                        st.success("Enviado com sucesso!"); time.sleep(1); st.rerun()
-            else: st.info("Nenhum contrato pendente.")
-
+        with tab_contratos:
+                st.markdown("<div style='margin-top: 20px;'></div>", unsafe_allow_html=True)
+                
+                # --- NOVO: BLOCO DE SOLICITAÇÃO DE CONTRATO ---
+                st.markdown("""
+                    <div style='background-color: #FFEB00; padding: 15px; border: 4px solid #1D1D1B; box-shadow: 8px 8px 0px #1D1D1B; text-align: center; margin-bottom: 20px;'>
+                        <h2 style='margin:0; font-size: 1.3rem; font-family: "Archivo Black", sans-serif; font-style: italic; color: #1D1D1B;'>📝 NOVO CONTRATO</h2>
+                        <p style='margin:5px 0 0 0; font-size: 0.9rem; font-weight: bold;'>VOCÊ AINDA NÃO GEROU SEU CONTRATO?</p>
+                    </div>
+                """, unsafe_allow_html=True)
+                
+                # Link para o formulário (Substitua o link abaixo pelo seu link real)
+                url_formulario = "https://forms.gle/9fqxvN8XfCmTRh9EA" 
+                
+                st.link_button("📋 PREENCHER DADOS PARA GERAR CONTRATO", url_formulario, width='stretch', type="primary")
+                
+                st.markdown("<div style='margin-top: 30px;'></div>", unsafe_allow_html=True)
+                st.divider()
+        
+                st.subheader("📄 Meus Documentos")
+                df_contratos = carregar_dados("Contratos")
+                if df_contratos is not None:
+                    meus_docs = df_contratos[df_contratos['ID_Usuario'].astype(str) == str(u['ID_Usuario'])]
+                    if not meus_docs.empty:
+                        for _, doc in meus_docs.iterrows():
+                            with st.container(border=True):
+                                st.write(f"**Doc:** {doc['Nome_Arquivo']}")
+                                st.link_button("📥 Baixar Original", doc['Link_Original'], width='stretch')
+                                arq = st.file_uploader("Upload Assinado (PDF)", type=['pdf'], key=f"up_{doc['Nome_Arquivo']}")
+                                if st.button("Confirmar Envio", key=f"btn_{doc['Nome_Arquivo']}", width='stretch', type="primary"):
+                                    if arq:
+                                        with st.spinner("Enviando..."):
+                                            link = salvar_documento_drive(arq, f"ASSINADO_{u['Nome']}_{doc['Nome_Arquivo']}")
+                                            if link and atualizar_contrato_enviado(u['ID_Usuario'], doc['Nome_Arquivo'], link):
+                                                st.success("Enviado com sucesso!")
+                                                time.sleep(1)
+                                                st.rerun()
+                    else:
+                        st.info("Nenhum contrato pendente.")
     # ==========================================
     # ABA 3: ACOMPANHAMENTO (LOGICA ANTERIOR DO SUPERVISOR)
     # ==========================================
