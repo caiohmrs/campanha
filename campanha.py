@@ -20,7 +20,14 @@ from google.auth.transport.requests import Request
 from googleapiclient.http import MediaIoBaseUpload
 from googleapiclient.discovery import build
 
+
 # --- CONFIGURAÇÃO INICIAL ---
+st.set_page_config(
+    page_title="COMANDO 2026", 
+    page_icon="🧢", 
+    layout="wide", 
+)
+
 
 # --- ESTILIZAÇÃO VISUAL UNIFICADA "COMANDO 2026" - VERSÃO FINAL CORRIGIDA ---
 st.markdown(f"""
@@ -643,6 +650,7 @@ with st.sidebar:
 # --- CABEÇALHO BEM-VINDO (VERSÃO SEM QUEBRA DE LINHA) ---
 nome_primeiro = u['Nome'].split()[0].upper()
 
+
 st.markdown(f"""
     <div style='
         background-color: #FFEB00; 
@@ -688,7 +696,36 @@ if cargo_limpo == "colaborador":
     # 1. CARREGAMENTO PRÉVIO DA MENSAGEM (Define 'm' logo no início)
     df_msgs = carregar_dados("Mensagens")
     df_usuarios = carregar_dados("Usuarios")
+    df_logs = carregar_dados("Logs")
     m = None 
+
+# --- NOVO: RESUMO PESSOAL (ESTILO FAIXA CLEAN) ---
+    hoje_str = agora.strftime("%d/%m/%Y")
+    meus_logs_hoje = df_logs[(df_logs['ID_Usuario'] == u['ID_Usuario']) & (df_logs['Data_Hora'].str.contains(hoje_str))]
+    qtd_acoes_hoje = len(meus_logs_hoje)
+    
+    st.markdown(f"""
+        <div style='
+            background-color: #FFEB00;
+            border-top: 2px solid #1D1D1B;
+            border-bottom: 2px solid #1D1D1B;
+            padding: 6px 0;
+            margin: 10px 0 25px 0;
+            display: flex;
+            justify-content: center;
+            gap: 40px;
+            font-family: "Archivo Black", sans-serif;
+            text-transform: uppercase;
+            font-style: italic;
+        '>
+            <span style='color: #1D1D1B; font-size: 0.9rem;'>
+                <span style='color: #E20613;'>●</span> AÇÕES HOJE: {qtd_acoes_hoje}
+            </span>
+            <span style='color: #1D1D1B; font-size: 0.9rem;'>
+                <span style='color: #E20613;'>●</span> STATUS: {'ATIVO' if qtd_acoes_hoje > 0 else 'OFF'}
+            </span>
+        </div>
+    """, unsafe_allow_html=True)
 
     if df_msgs is not None and not df_msgs.empty:
         # Filtra pelo ID do Grupo
@@ -1125,9 +1162,52 @@ elif cargo_limpo == "admin":
     df_usuarios = carregar_dados("Usuarios")
     df_logs = carregar_dados("Logs")
 
-    if df_usuarios is None or df_logs is None:
-        st.error("Falha ao carregar o banco de dados principal.")
-        st.stop()
+# --- TICKER DE OPERAÇÕES ANIMADO (VERSÃO INTEGRADA - AMARELO) ---
+    if not df_logs.empty:
+        ultimos_logs_ticker = df_logs.tail(10)[::-1]
+        
+        frase_ticker = "  ///  ".join([
+            f"⚡ {str(row['ID_Usuario']).split('@')[0].upper()}: {str(row['Tipo_Acao']).split('|')[0].strip().upper()}"
+            for _, row in ultimos_logs_ticker.iterrows()
+        ])
+        conteudo_duplicado = f"{frase_ticker} /// {frase_ticker}"
+
+        st.markdown(f"""
+            <style>
+                @keyframes scroll {{
+                    0% {{ transform: translateX(0); }}
+                    100% {{ transform: translateX(-50%); }}
+                }}
+                .ticker-container {{
+                    width: 100%;
+                    overflow: hidden;
+                    background: #FFEB00; /* Fundo Amarelo */
+                    border-top: 3px solid #1D1D1B;
+                    border-bottom: 3px solid #1D1D1B;
+                    padding: 8px 0;
+                    margin-bottom: 25px;
+                    white-space: nowrap;
+                    box-shadow: 0px 4px 10px rgba(0,0,0,0.1);
+                }}
+                .ticker-content {{
+                    display: inline-block;
+                    animation: scroll 60s linear infinite;
+                    font-family: 'Archivo Black', sans-serif;
+                    font-size: 0.9rem;
+                    color: #1D1D1B; /* Texto Preto */
+                    font-style: italic;
+                    text-transform: uppercase;
+                }}
+                .ticker-content:hover {{
+                    animation-play-state: paused;
+                }}
+            </style>
+            <div class="ticker-container">
+                <div class="ticker-content">
+                    {conteudo_duplicado}
+                </div>
+            </div>
+        """, unsafe_allow_html=True)
 
     # 2. ABAS DE GESTÃO
     tab_hierarquia, tab_logs, tab_mapa, tab_mensagens, tab_cadastro, tab_contratos = st.tabs([
