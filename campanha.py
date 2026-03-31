@@ -1224,7 +1224,7 @@ elif cargo_limpo == "admin":
     ])
 
 # ==========================================
-    # ABA 1: ESTRUTURA DE EQUIPES (FILTRO SELECTBOX)
+    # ABA 1: ESTRUTURA DE EQUIPES (GRID DESKTOP CORRIGIDO)
     # ==========================================
     with tab_hierarquia:
         st.markdown("<h2 style='font-family: \"Archivo Black\", sans-serif; color: #1D1D1B; margin-bottom: 25px; font-size: 2rem;'>ESTRUTURA DE EQUIPES</h2>", unsafe_allow_html=True)
@@ -1234,41 +1234,34 @@ elif cargo_limpo == "admin":
         df_grupos_info = carregar_dados("Grupos")
 
         if df_usuarios is not None and df_grupos_info is not None:
-            # Cruzamos os dados para ter o Macro_Grupo
             df_gerencial = pd.merge(df_usuarios, df_grupos_info, on='ID_Grupo', how='left')
             df_gerencial['Macro_Grupo'] = df_gerencial['Macro_Grupo'].fillna("GERAL")
 
-            # --- NOVO FILTRO ESTILO ADESIVO (SELECTBOX) ---
+            # Filtro de Macro Região
             macros_existentes = sorted(df_gerencial['Macro_Grupo'].unique().tolist())
-            
             st.markdown("<p style='font-family: \"Archivo Black\", sans-serif; font-size: 0.9rem; margin-bottom: 5px;'>📍 SELECIONE A MACRO REGIÃO:</p>", unsafe_allow_html=True)
-            
-            macro_selecionada = st.selectbox(
-                "FILTRO_MACRO_ADMIN",
-                ["TODAS AS REGIÕES"] + macros_existentes,
-                label_visibility="collapsed" # Deixa o visual limpo como no seu exemplo
-            )
+            macro_selecionada = st.selectbox("FILTRO_MACRO", ["TODAS AS REGIÕES"] + macros_existentes, label_visibility="collapsed")
 
-            # Aplica o filtro baseado na seleção única
             if macro_selecionada == "TODAS AS REGIÕES":
-                df_filtrado_admin = df_gerencial.copy()
+                df_f_admin = df_gerencial.copy()
             else:
-                df_filtrado_admin = df_gerencial[df_gerencial['Macro_Grupo'] == macro_selecionada]
+                df_f_admin = df_gerencial[df_gerencial['Macro_Grupo'] == macro_selecionada]
             
-            # Filtramos os supervisores
-            supervisores = df_filtrado_admin[df_filtrado_admin['Cargo'].str.lower().str.strip() == "supervisor"]
+            supervisores = df_f_admin[df_f_admin['Cargo'].str.lower().str.strip() == "supervisor"]
             
             if supervisores.empty:
-                st.warning("Nenhum supervisor encontrado nesta região.")
+                st.warning("Nenhum supervisor nesta região.")
             else:
-                # Grid de 2 colunas para PC
+                # 1. CRIAMOS AS COLUNAS TOTAIS DO MONITOR
                 col_sup1, col_sup2 = st.columns(2, gap="large")
                 
                 for i, (_, sup) in enumerate(supervisores.iterrows()):
+                    # Escolhe a coluna da vez
                     col_alvo = col_sup1 if i % 2 == 0 else col_sup2
                     
+                    # --- TUDO A PARTIR DAQUI PRECISA ESTAR DENTRO DO 'WITH COL_ALVO' ---
                     with col_alvo:
-                        equipe = df_filtrado_admin[df_filtrado_admin['ID_Supervisor'].astype(str).str.strip() == str(sup['ID_Usuario']).strip()]
+                        equipe = df_f_admin[df_f_admin['ID_Supervisor'].astype(str).str.strip() == str(sup['ID_Usuario']).strip()]
                         qtd_equipe = len(equipe)
                         
                         # Ativos hoje
@@ -1276,50 +1269,58 @@ elif cargo_limpo == "admin":
                         ativos_hoje = logs_eq[logs_eq['Tipo_Acao'].str.contains("Check-in")]['ID_Usuario'].nunique()
                         cor_ativos = "#E20613" if ativos_hoje > 0 else "#666666"
 
-                        # Card Brutalista
-                        card_html = ""
-                        card_html += "<div style='background-color: #FFFFFF; border: 4px solid #1D1D1B; box-shadow: 8px 8px 0px #1D1D1B; padding: 20px; margin-bottom: 12px;'>"
-                        card_html += "<div style='border-bottom: 3px solid #1D1D1B; padding-bottom: 12px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;'>"
-                        card_html += "<div>"
-                        card_html += f"<h3 style='margin: 0; font-family: \"Archivo Black\", sans-serif; font-size: 1.5rem; color: #E20613; text-transform: uppercase;'>{sup['Nome']}</h3>"
-                        card_html += f"<span style='font-size: 0.8rem; color: #666; font-weight: bold; text-transform: uppercase;'>MACRO: {sup['Macro_Grupo']}</span>"
-                        card_html += "</div>"
-                        card_html += f"<span style='background-color: #FFEB00; border: 2px solid #1D1D1B; padding: 4px 10px; font-family: \"Archivo Black\", sans-serif; font-size: 0.8rem; color: #1D1D1B;'>{sup['ID_Grupo']}</span>"
-                        card_html += "</div>"
-                        card_html += "<div style='display: flex; gap: 15px;'>"
-                        card_html += "<div style='flex: 1; background-color: #F4F4F4; border: 2px solid #1D1D1B; padding: 12px; text-align: center;'>"
-                        card_html += "<div style='font-family: \"Archivo Black\", sans-serif; font-size: 0.85rem; color: #666;'>EQUIPE</div>"
-                        card_html += f"<div style='font-family: \"Archivo Black\", sans-serif; font-size: 2.2rem; color: #1D1D1B; line-height: 1; margin-top: 5px;'>{qtd_equipe}</div>"
-                        card_html += "</div>"
-                        card_html += "<div style='flex: 1; background-color: #F4F4F4; border: 2px solid #1D1D1B; padding: 12px; text-align: center;'>"
-                        card_html += "<div style='font-family: \"Archivo Black\", sans-serif; font-size: 0.85rem; color: #666;'>ATIVOS</div>"
-                        card_html += f"<div style='font-family: \"Archivo Black\", sans-serif; font-size: 2.2rem; color: {cor_ativos}; line-height: 1; margin-top: 5px;'>{ativos_hoje}</div>"
-                        card_html += "</div>"
-                        card_html += "</div>"
-                        card_html += "</div>"
-                        
+                        # A. CARD HTML (Título, Grupo e Números)
+                        card_html = f"""
+                            <div style='background-color: #FFFFFF; border: 4px solid #1D1D1B; box-shadow: 6px 6px 0px #1D1D1B; padding: 20px; margin-bottom: 12px;'>
+                                <div style='border-bottom: 3px solid #1D1D1B; padding-bottom: 12px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;'>
+                                    <div>
+                                        <h3 style='margin: 0; font-family: "Archivo Black", sans-serif; font-size: 1.5rem; color: #E20613; text-transform: uppercase;'>{sup['Nome']}</h3>
+                                        <span style='font-size: 0.8rem; color: #666; font-weight: bold;'>MACRO: {sup['Macro_Grupo']}</span>
+                                    </div>
+                                    <span style='background-color: #FFEB00; border: 2px solid #1D1D1B; padding: 4px 10px; font-family: "Archivo Black", sans-serif; font-size: 0.8rem;'>{sup['ID_Grupo']}</span>
+                                </div>
+                                <div style='display: flex; gap: 15px;'>
+                                    <div style='flex: 1; background-color: #F4F4F4; border: 2px solid #1D1D1B; padding: 12px; text-align: center;'>
+                                        <div style='font-family: "Archivo Black", sans-serif; font-size: 0.85rem; color: #666;'>EQUIPE</div>
+                                        <div style='font-family: "Archivo Black", sans-serif; font-size: 2.2rem; color: #1D1D1B; line-height: 1; margin-top: 5px;'>{qtd_equipe}</div>
+                                    </div>
+                                    <div style='flex: 1; background-color: #F4F4F4; border: 2px solid #1D1D1B; padding: 12px; text-align: center;'>
+                                        <div style='font-family: "Archivo Black", sans-serif; font-size: 0.85rem; color: #666;'>ATIVOS</div>
+                                        <div style='font-family: "Archivo Black", sans-serif; font-size: 2.2rem; color: {cor_ativos}; line-height: 1; margin-top: 5px;'>{ativos_hoje}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        """
                         st.markdown(card_html, unsafe_allow_html=True)
                         
-                        # Botão de Chat
+                        # B. BOTÕES LADO A LADO (CHAT E GRUPO)
                         w_sup = sanitize_whatsapp(sup['WhatsApp'])
-                        st.link_button(f"💬 CHAT: {sup['Nome'].split()[0].upper()}", f"https://wa.me/{w_sup}", width='stretch')
+                        link_grp = str(sup.get('Link_Grupo', '')).strip()
                         
+                        c_wa1, c_wa2 = st.columns(2)
+                        with c_wa1:
+                            st.link_button(f"👤 CHAT: {sup['Nome'].split()[0].upper()}", f"https://wa.me/{w_sup}", width="stretch")
+                        with c_wa2:
+                            if link_grp and "chat.whatsapp" in link_grp:
+                                st.link_button("📢 GRUPO", f"{link_grp}#{sup['ID_Usuario']}", width="stretch")
+                            else:
+                                st.button("🚫 SEM LINK", disabled=True, width="stretch", key=f"no_link_{sup['ID_Usuario']}")
+
+                        # C. EXPANDER DE INTEGRANTES (DENTRO DA COLUNA)
                         with st.expander(f"👥 LISTA DE INTEGRANTES ({qtd_equipe})"):
                             if not equipe.empty:
-                                lista_html = "<div style='display: flex; flex-direction: column; gap: 10px;'>"
                                 for _, vol in equipe.iterrows():
-                                    tem_log = not logs_eq[logs_eq['ID_Usuario'] == vol['ID_Usuario']].empty
-                                    status_ico = "🟢" if tem_log else "⚪"
                                     w_vol = sanitize_whatsapp(vol['WhatsApp'])
-                                    
-                                    lista_html += f"<div style='display: flex; justify-content: space-between; align-items: center; background-color: #F4F4F4; border: 2px solid #1D1D1B; padding: 12px;'>"
-                                    lista_html += f"<div style='line-height: 1.3;'><span style='font-family: \"Archivo Black\", sans-serif; font-size: 1rem; color: #1D1D1B;'>{status_ico} {vol['Nome'].upper()}</span><br><span style='font-size: 0.8rem; color: #666; font-weight: bold;'>ID: {vol['ID_Usuario']}</span></div>"
-                                    lista_html += f"<a href='https://wa.me/{w_vol}' target='_blank' style='background-color: #25D366; color: #FFFFFF; font-family: \"Archivo Black\", sans-serif; font-size: 0.8rem; padding: 8px 15px; border: 2px solid #1D1D1B; box-shadow: 2px 2px 0px #1D1D1B; text-decoration: none; text-transform: uppercase; white-space: nowrap;'>CHAMAR</a>"
-                                    lista_html += "</div>"
-                                lista_html += "</div>"
-                                st.markdown(lista_html, unsafe_allow_html=True)
+                                    st.markdown(f"""
+                                        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #ddd; padding: 8px 0;">
+                                            <span style="font-size: 0.9rem; font-weight: bold; color: #1D1D1B;">{vol['Nome'].upper()}</span>
+                                            <a href="https://wa.me/{w_vol}" target="_blank" style="background-color: #25D366; color: #FFFFFF; font-size: 0.7rem; padding: 4px 10px; border: 2px solid #1D1D1B; text-decoration: none; font-weight: bold; white-space: nowrap;">CHAMAR</a>
+                                        </div>
+                                    """, unsafe_allow_html=True)
+                            else:
+                                st.caption("Sem voluntários.")
                         
-                        st.markdown("<br>", unsafe_allow_html=True)
+                        st.markdown("<br><br>", unsafe_allow_html=True)
 
 # ==========================================
     # ABA 2: MENSAGENS E MISSÕES (AJUSTADO P/ 4 COLUNAS)
