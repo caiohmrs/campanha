@@ -353,7 +353,30 @@ def salvar_foto_drive(foto_arquivo, nome_arquivo):
         st.error(f"Erro no Drive: {e}")
         return None
 
+def registrar_novo_contrato_admin(id_usuario, nome_arquivo, link_original):
+    """Cria uma nova linha na aba Contratos para o colaborador assinar"""
+    try:
+        client = _get_gspread_client()
+        if client is None: return False
+        planilha_id = st.secrets["planilha"]["id"]
+        aba = client.open_by_key(planilha_id).worksheet("Contratos")
+        
+        # Estrutura: ID_Usuario | Nome_Arquivo | Link_Original | Status | Link_Assinado
+        aba.append_row([
+            str(id_usuario), 
+            str(nome_arquivo), 
+            str(link_original), 
+            "Aguardando Assinatura", 
+            "" # Link_Assinado começa vazio
+        ])
+        return True
+    except Exception as e:
+        st.error(f"Erro ao registrar contrato na planilha: {e}")
+        return False
+
 def registrar_acao(id_usuario, tipo_acao, localizacao="Não informada", feedback=""):
+
+    
     try:
         client = _get_gspread_client()
         if client is None: return
@@ -380,8 +403,6 @@ def registrar_acao(id_usuario, tipo_acao, localizacao="Não informada", feedback
     except Exception as e:
         st.error(f"Falha ao registrar log: {e}")
 
-# ... (Funções salvar_documento_drive e atualizar_contrato_enviado permanecem iguais) ...
-
 def salvar_documento_drive(doc_arquivo, nome_arquivo):
     try:
         creds = _get_drive_credentials() 
@@ -399,27 +420,39 @@ def salvar_documento_drive(doc_arquivo, nome_arquivo):
         return None
 
 def atualizar_contrato_enviado(id_usuario, nome_arquivo, link_drive):
+    """Atualiza o link do contrato E o status na planilha"""
     try:
         client = _get_gspread_client()
         if client is None: return False
         planilha_id = st.secrets["planilha"]["id"]
-        planilha = client.open_by_key(planilha_id)
-        aba = planilha.worksheet("Contratos")
+        aba = client.open_by_key(planilha_id).worksheet("Contratos")
+        
         dados = aba.get_all_records()
-        linha_idx = None
+        linha_para_atualizar = None
+        
         for i, linha in enumerate(dados, start=2):
-            if str(linha.get('ID_Usuario')) == str(id_usuario) and str(linha.get('Nome_Arquivo')) == str(nome_arquivo):
-                linha_idx = i
+            if str(linha.get('ID_Usuario')) == str(id_usuario) and \
+               str(linha.get('Nome_Arquivo')) == str(nome_arquivo):
+                linha_para_atualizar = i
                 break
-        if linha_idx:
+        
+        if linha_para_atualizar:
             cabecalho = aba.row_values(1)
+            
+            # 1. Atualiza o Link do Assinado
             if 'Link_Assinado' in cabecalho:
-                col_idx = cabecalho.index('Link_Assinado') + 1
-                aba.update_cell(linha_idx, col_idx, link_drive)
-                return True
+                col_link = cabecalho.index('Link_Assinado') + 1
+                aba.update_cell(linha_para_atualizar, col_link, link_drive)
+            
+            # 2. Atualiza o Status para 'Enviado / Em Análise'
+            if 'Status' in cabecalho:
+                col_status = cabecalho.index('Status') + 1
+                aba.update_cell(linha_para_atualizar, col_status, "Assinado / Em Análise")
+                
+            return True
         return False
     except Exception as e:
-        st.error(f"Erro ao atualizar contrato: {e}")
+        st.error(f"Falha ao atualizar contrato: {e}")
         return False
 
 def sanitize_whatsapp(v: str) -> str:
@@ -1097,8 +1130,8 @@ elif cargo_limpo == "admin":
         st.stop()
 
     # 2. ABAS DE GESTÃO
-    tab_hierarquia, tab_logs, tab_mapa, tab_mensagens, tab_cadastro = st.tabs([
-        "👥 EQUIPES", "📊 DASHBOARD", "🗺️ MAPA", "📝 MISSÕES", "➕ CADASTRO"
+    tab_hierarquia, tab_logs, tab_mapa, tab_mensagens, tab_cadastro, tab_contratos = st.tabs([
+        "👥 EQUIPES", "📊 DASHBOARD", "🗺️ MAPA", "📝 MISSÕES", "➕ CADASTRO", "📄 CONTRATOS"
     ])
 
     # ==========================================
@@ -1527,3 +1560,92 @@ elif cargo_limpo == "admin":
             with st.container(border=True):
                 st.warning(f"⚠️ NENHUM DADO DE GPS ENCONTRADO PARA: {periodo_mapa}")
                 st.info("Somente ações realizadas com GPS ativo no celular aparecem neste mapa.")
+
+# ==========================================
+    # ABA 5: GESTÃO DE CONTRATOS (ADMIN)
+    # ==========================================
+    with tab_contratos:
+        st.markdown("<h2 style='font-family: \"Archivo Black\", sans-serif; color: #1D1D1B; margin-bottom: 25px; font-size: 2rem;'>📄 GESTÃO DE CONTRATOS</h2>", unsafe_allow_html=True)
+        
+        col_envio, col_status = st.columns([1.2, 2], gap="large")
+
+        with col_envio:
+            st.markdown("### 📤 ENVIAR PARA INTEGRANTE")
+            with st.container(border=True):
+                with st.form("form_admin_envia_contrato", clear_on_submit=True):
+                    # --- MELHORIA: LISTA DETALHADA PARA SELEÇÃO ---
+                    # Criamos uma lista formatada: "JOÃO SILVA | SUPERVISOR | CEILÂNDIA"
+                    # Filtrando para não aparecer o próprio Admin na lista de envios
+                    df_destinatarios = df_usuarios[df_usuarios['Cargo'].str.lower() != "admin"]
+                    
+                    mapeamento_dest = {
+                        f"{row['Nome'].upper()} | {row['Cargo'].upper()} | {row['ID_Grupo']}": row['ID_Usuario'] 
+                        for _, row in df_destinatarios.iterrows()
+                    }
+                    lista_nomes_contrato = sorted(mapeamento_dest.keys())
+                    
+                    user_selecionado_display = st.selectbox("PARA QUEM É O CONTRATO?", options=lista_nomes_contrato)
+                    
+                    n_doc = st.text_input("NOME DO DOCUMENTO:", placeholder="Ex: Termo_de_Adesao_V1")
+                    arq_pdf = st.file_uploader("ARQUIVO PDF:", type=['pdf'])
+                    
+                    if st.form_submit_button("🚀 ENVIAR AGORA", width='stretch', type="primary"):
+                        if arq_pdf and n_doc and user_selecionado_display:
+                            # Recupera o ID real (e-mail) do mapeamento
+                            u_destino = mapeamento_dest[user_selecionado_display]
+                            
+                            with st.spinner("Subindo para o Drive..."):
+                                # 1. Salva no Google Drive (na sua pasta de contratos do secrets)
+                                link_gerado = salvar_documento_drive(arq_pdf, f"ORIGINAL_{n_doc}_{u_destino}")
+                                
+                                if link_gerado:
+                                    # 2. Cria a linha na planilha 'Contratos'
+                                    if registrar_novo_contrato_admin(u_destino, n_doc, link_gerado):
+                                        st.success(f"✅ DOCUMENTO ENVIADO COM SUCESSO!")
+                                        st.cache_data.clear()
+                                        time.sleep(1)
+                                        st.rerun()
+                        else:
+                            st.error("Preencha o nome do doc e selecione o PDF.")
+        with col_status:
+            st.markdown("### 📋 MONITORAMENTO")
+            df_cont = carregar_dados("Contratos")
+            
+            if df_cont is not None and not df_cont.empty:
+                # Cruzamos os dados para mostrar o Nome e não o e-mail
+                df_view = pd.merge(df_cont, df_usuarios[['ID_Usuario', 'Nome']], on='ID_Usuario', how='left')
+                df_view['Nome'] = df_view['Nome'].fillna(df_view['ID_Usuario']) # Fallback se não achar nome
+
+                # Tabela de Resumo
+                st.dataframe(
+                    df_view[['Nome', 'Nome_Arquivo', 'Status']],
+                    column_config={
+                        "Nome": "Integrante",
+                        "Nome_Arquivo": "Documento",
+                        "Status": "Situação"
+                    },
+                    width="stretch",
+                    hide_index=True
+                )
+                
+                # Detalhes com botões
+                with st.expander("🔍 VER LINKS E ARQUIVOS", expanded=True):
+                    for _, row in df_view.iterrows():
+                        c_info, c_links = st.columns([2, 1.5])
+                        
+                        with c_info:
+                            # Mostra o nome em destaque
+                            st.markdown(f"**{row['Nome'].upper()}**")
+                            st.caption(f"Arquivo: {row['Nome_Arquivo']}")
+                        
+                        with c_links:
+                            # Botões lado a lado menores
+                            sub_c1, sub_c2 = st.columns(2)
+                            sub_c1.link_button("📄 ORIG", row['Link_Original'], width='stretch', help="Baixar original enviado")
+                            
+                            link_assin = str(row.get('Link_Assinado', ''))
+                            if link_assin.startswith("http"):
+                                sub_c2.link_button("✍️ ASSIN", link_assin, width='stretch', type="primary", help="Ver assinado pelo integrante")
+                            else:
+                                sub_c2.button("⏳ PEND", disabled=True, width='stretch')
+                        st.divider()
