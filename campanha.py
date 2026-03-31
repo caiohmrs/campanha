@@ -381,31 +381,34 @@ def registrar_novo_contrato_admin(id_usuario, nome_arquivo, link_original):
         return False
 
 def registrar_acao(id_usuario, tipo_acao, localizacao="Não informada", feedback=""):
-
-    
     try:
+        # GARANTIA: Se a localização vier como None, transforma em texto
+        loc_safe = str(localizacao) if localizacao is not None else "Não informada"
+
         client = _get_gspread_client()
         if client is None: return
         planilha_id = st.secrets["planilha"]["id"]
         planilha = client.open_by_key(planilha_id)
         aba = planilha.worksheet("Logs")
-        agora_br = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=3)
-        endereco = "Processando..."
-        if "," in localizacao:
-            endereco = obter_endereco_simples(localizacao)
-        else:
-            endereco = "Sem GPS"
         
+        # Horário Brasília
+        agora_br = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=3)
+        
+        # Tenta pegar o endereço apenas se houver coordenadas válidas
+        endereco = "Sem GPS"
+        if "," in loc_safe: # Agora loc_safe nunca é None
+            endereco = obter_endereco_simples(loc_safe)
+
         aba.append_row([
             agora_br.strftime("%Y%m%d%H%M%S"),
             str(id_usuario),
             str(tipo_acao),
             agora_br.strftime("%d/%m/%Y %H:%M:%S"),
-            str(localizacao),
+            loc_safe,
             str(endereco),
             str(feedback)
         ])
-        st.toast(f"✅ Log: {tipo_acao}")
+        st.toast(f"✅ Registro: {tipo_acao}")
     except Exception as e:
         st.error(f"Falha ao registrar log: {e}")
 
@@ -505,15 +508,17 @@ def sanitize_whatsapp(v: str) -> str:
 
 def obter_endereco_simples(coords_str):
     """Converte 'lat, lon' em um endereço curto (Rua ou Bairro)"""
-    if not coords_str or "GPS" in coords_str or "," not in coords_str:
+    # GARANTIA: Transforma em string e limpa
+    c_str = str(coords_str) if coords_str is not None else ""
+    
+    if not c_str or "GPS" in c_str or "informada" in c_str or "," not in c_str:
         return "Local não identificado"
     
     try:
         geolocator = Nominatim(user_agent="comando2026_geocoder")
-        location = geolocator.reverse(coords_str, timeout=10)
+        location = geolocator.reverse(c_str, timeout=10)
         address = location.raw.get('address', {})
         
-        # Tenta pegar as informações mais relevantes (Rua, Bairro ou Cidade)
         rua = address.get('road', '')
         bairro = address.get('suburb', '')
         cidade = address.get('city', address.get('town', ''))
@@ -523,7 +528,6 @@ def obter_endereco_simples(coords_str):
         return f"{bairro}, {cidade}".strip(", ")
     except:
         return "Endereço indisponível"
-
 
 # --- LOGICA DE COOKIES ---
 cookie_manager = stx.CookieManager()
