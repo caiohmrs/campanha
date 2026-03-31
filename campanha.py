@@ -25,7 +25,6 @@ from googleapiclient.discovery import build
 st.set_page_config(
     page_title="COMANDO 2026", 
     page_icon="🧢", 
-    layout="wide", 
 )
 
 
