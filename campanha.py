@@ -840,7 +840,7 @@ if cargo_limpo == "colaborador":
         with col_m2:
             if st.button("💬 TRAGA UM NOVO AMIGO PARA SER COLABORADOR!", width='stretch', key="fixo_whats"):
                 registrar_acao(u['ID_Usuario'], "AÇÃO: TRAZER NOVO COLABORADOR!", localizacao=st.session_state.get('last_coords'))
-                mensagem_pronta = "Salve! Dá uma olhada no que o Max Maciel está fazendo pelo DF. Vamos juntos? 🚀 https://www.instagram.com/maxmacieldf/"
+                mensagem_pronta = "Salve! Já acompanha o trabalho do Max Maciel pelo DF?? Sou colaborador dele e estou muito feliz com o trabalho que estamos fazendo. Vamos juntos nessa campanha? 🚀 https://forms.gle/NzJy6NEynbaPyD6w6"
                 msg_url = urllib.parse.quote(mensagem_pronta)
                 st.markdown(f"""
                     <a href="https://wa.me/?text={msg_url}" target="_blank">
