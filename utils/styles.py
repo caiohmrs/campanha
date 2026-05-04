@@ -57,6 +57,10 @@ def get_css():
     
     return f"""
     <style>
+        /* GARANTIA DE MODO CLARO GLOBAL */              
+        html, body {{                                    
+            color-scheme: light !important;              
+        }}  
         /* 0. CONFIGURAÇÕES TÉCNICAS E FONTES */
         @import url('https://fonts.googleapis.com/css2?family=Archivo+Black&family=Roboto:wght@400;700&display=swap');
 
@@ -108,11 +112,19 @@ def get_css():
             background-color: transparent !important;
         }}
 
-        /* 2. SIDEBAR */
-        section[data-testid="stSidebar"] {{
-            background-color: var(--cor-primaria) !important;
-            border-right: var(--borda-largura) var(--borda-estilo) var(--cor-texto) !important;
-        }}
+        /* 2. SIDEBAR */                                 
+        section[data-testid="stSidebar"] {{              
+            background-color: var(--cor-primaria)        
+!important;                                              
+            border-right: var(--borda-largura)           
+var(--borda-estilo) var(--cor-texto) !important;         
+        }}                                               
+                                                         
+        /* CORREÇÃO DA SETA DA SIDEBAR (MOBILE) */       
+        button[data-testid="stSidebarCollapseButton"] {{ 
+            background-color: transparent !important;    
+            color: var(--cor-texto) !important;          
+        }}                                   
 
         /* 3. TIPOGRAFIA (HEADINGS) */
         h1, h2, h3 {{                                                                                      
