@@ -3,3 +3,6 @@
 showSidebarNavigation = false
 # Define o modo da barra de ferramentas (minimal remove o menu desnecessário)
 toolbarMode = "minimal"                                                                          
+
+[theme]
+base = "light"
