@@ -116,6 +116,25 @@ def get_css():
 var(--borda-estilo) var(--cor-texto) !important;         
         }}                                               
                                                          
+        /* CORREÇÃO DA SETA DA SIDEBAR (MOBILE) - VERSÃO 
+AGRESSIVA */                                             
+        button[data-testid="stSidebarCollapseButton"],   
+        div[data-testid="stSidebarCollapseButton"] {{     
+            background-color: transparent !important;    
+            color: var(--cor-texto) !important;          
+            opacity: 1 !important;                       
+            visibility: visible !important;              
+        }}                                                
+                                                         
+        button[data-testid="stSidebarCollapseButton"]    
+svg,                                                     
+        div[data-testid="stSidebarCollapseButton"] svg {{ 
+            fill: var(--cor-texto) !important;           
+            color: var(--cor-texto) !important;          
+            stroke: var(--cor-texto) !important;         
+            opacity: 1 !important;       
+        }}                                              
+                                                         
         /* CORREÇÃO DA SETA DA SIDEBAR (MOBILE) */       
         button[data-testid="stSidebarCollapseButton"] {{ 
             background-color: transparent !important;    
