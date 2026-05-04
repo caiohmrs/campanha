@@ -61,6 +61,7 @@ def get_css():
         html, body {{                                    
             color-scheme: light !important;              
         }}  
+        
         /* 0. CONFIGURAÇÕES TÉCNICAS E FONTES */
         @import url('https://fonts.googleapis.com/css2?family=Archivo+Black&family=Roboto:wght@400;700&display=swap');
 
