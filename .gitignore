@@ -6,7 +6,7 @@ utils/__pycache__/
 
 # Streamlit (Configurações e Segredos)
 .streamlit/secrets.toml
-.streamlit/config.toml
+
 
 # Ambientes Virtuais (Caso você use)
 venv/

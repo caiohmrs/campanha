@@ -199,7 +199,9 @@ def get_css():
             border: var(--borda-largura) var(--borda-estilo) var(--cor-texto) !important;
             text-align: center !important;
             background-color: var(--cor-branco) !important;
+            color: var(--cor-texto) !important;
             border-radius: var(--border-radius) !important;
+            -webkit-text-fill-color: var(--cor-texto) !important;
         }}
 
         /* 8. FOOTER E DECORAÇÕES */
