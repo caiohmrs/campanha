@@ -1,0 +1,19 @@
+# Cache do Python (Raiz e subpastas)
+__pycache__/
+utils/__pycache__/
+*.py[cod]
+*$py.class
+
+# Streamlit (Configurações e Segredos)
+.streamlit/secrets.toml
+.streamlit/config.toml
+
+# Ambientes Virtuais (Caso você use)
+venv/
+.venv/
+env/
+
+# Outros arquivos de sistema ou IDE
+.DS_Store
+.vscode/
+.idea/
