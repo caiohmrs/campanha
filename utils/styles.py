@@ -16,16 +16,16 @@
 
 CORES = {
     'primaria': '#FFD700',      # Ouro (Brilhante, mas
-
     'secundaria': '#B22222',    # Vermelho Tijolo (Sólido
-
     'texto': '#1A1A1A',         # Grafite Escuro
-
     'fundo': '#E2E8F0',         # Cinza Azulado (Moderno,
-
     'branco': '#FFFFFF',        # Branco Puro
     'gradiente_inicio': '#FFFFFF', # Branco
     'gradiente_fim': '#D1D5DB',    # Cinza Metálico
+    # Cores adicionais para gamificação
+    'gold': '#FFCC00',
+    'silver': '#C0C0C0',
+    'bronze': '#CD7F32',
 }
 
 # =============================================================================
@@ -57,6 +57,7 @@ def get_css():
     
     return f"""
     <style>
+
         /* 0. CONFIGURAÇÕES TÉCNICAS E FONTES */
         @import url('https://fonts.googleapis.com/css2?family=Archivo+Black&family=Roboto:wght@400;700&display=swap');
 
@@ -112,7 +113,7 @@ def get_css():
         section[data-testid="stSidebar"] {{
             background-color: var(--cor-primaria) !important;
             border-right: var(--borda-largura) var(--borda-estilo) var(--cor-texto) !important;
-        }}                             
+        }}  
 
         /* 3. TIPOGRAFIA (HEADINGS) */
         h1, h2, h3 {{                                                                                      
@@ -125,7 +126,7 @@ def get_css():
 
         /* 4. BOTÕES */
         .stButton > button, 
-        div[data-testid="stPopover"] > button {{
+        div[data-baseweb="popover"] > button {{
             background-color: var(--cor-secundaria) !important;
             color: var(--cor-branco) !important;
             font-family: var(--fonte-titulo) !important;
@@ -302,8 +303,6 @@ def get_css():
             border: 4px solid var(--cor-texto);
             box-shadow: var(--sombra-offset-x) var(--sombra-offset-y) var(--sombra-blur) var(--cor-texto) !important;
             text-align: center;
-            width: 90%;
-            margin: 10px auto 25px auto;
         }}
 
         .welcome-banner-title {{
@@ -386,7 +385,7 @@ def get_css():
             color: var(--cor-texto);
         }}
 
-        /* 18. INFO BANNER (MENSAGEM DO DIA) */
+        /* 18. INFO BANNER */
         .info-banner {{
             background-color: var(--cor-primaria);
             padding: 40px 20px;
@@ -451,7 +450,7 @@ def get_css():
             100% {{ transform: translateX(-50%); }}
         }}
 
-        /* 20. TEAM CARD (SUPERVISOR/ADMIN) */
+        /* 20. TEAM CARD */
         .team-card {{
             background-color: var(--cor-branco);
             border: 4px solid var(--cor-texto);
@@ -540,7 +539,7 @@ def get_css():
             color: var(--cor-secundaria);
         }}
 
-        /* 22. SUPPORT PANEL (SUPORTE) */
+        /* 22. SUPPORT PANEL */
         .support-panel {{
             background-color: var(--cor-secundaria);
             padding: 20px;
@@ -703,9 +702,254 @@ def get_css():
         .metric-row-value-secondary {{
             color: var(--cor-secundaria);
         }}
+
+        /* 28. LEADERBOARD CARD */
+        .leaderboard-card {{
+            background-color: var(--cor-branco);
+            border: 4px solid var(--cor-texto);
+            box-shadow: var(--sombra-offset-x) var(--sombra-offset-y) var(--sombra-blur) var(--cor-texto) !important;
+            padding: 20px;
+            margin-bottom: 25px;
+        }}
+
+        .leaderboard-header {{
+            background-color: var(--cor-primaria);
+            border-bottom: 3px solid var(--cor-texto);
+            padding: 10px 15px;
+            text-align: center;
+            font-family: var(--fonte-titulo);
+            font-style: italic;
+            color: var(--cor-texto);
+            text-transform: uppercase;
+        }}
+
+        .leaderboard-row {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--cor-fundo);
+            font-family: var(--fonte-texto);
+            color: var(--cor-texto);
+        }}
+
+        .position-badge {{
+            background-color: var(--cor-secundaria);
+            color: var(--cor-branco);
+            border: 2px solid var(--cor-texto);
+            border-radius: var(--border-radius);
+            padding: 2px 6px;
+            font-family: var(--fonte-titulo);
+            font-size: 0.9rem;
+            text-transform: uppercase;
+        }}
+
+        .points-badge {{
+            background-color: var(--cor-primaria);
+            color: var(--cor-texto);
+            border: 2px solid var(--cor-texto);
+            border-radius: var(--border-radius);
+            padding: 2px 6px;
+            font-family: var(--fonte-titulo);
+            font-size: 0.85rem;
+        }}
+
+        /* 29. ACTION PROGRESS CARD (GAMIFICAÇÃO) */
+        .action-progress-card {{
+            background-color: var(--cor-primaria);
+            border: 4px solid var(--cor-texto);
+            border-radius: var(--border-radius);
+            padding: 12px;
+            margin-bottom: 12px;
+            box-shadow: var(--sombra-offset-x) var(--sombra-offset-y) var(--sombra-blur) var(--cor-texto) !important;
+        }}
+
+        .action-progress-row {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 6px;
+        }}
+
+        .action-progress-label {{
+            font-family: var(--fonte-titulo);
+            color: var(--cor-texto);
+        }}
+
+        .action-progress-value {{
+            font-family: var(--fonte-titulo);
+            font-weight: bold;
+            color: var(--cor-secundaria);
+        }}
+
+        /* 30. CARD INFORMATIVO “COMO FUNCIONA O RANKING” */
+        .info-ranking-card {{
+            background-color: var(--cor-branco);            /* fundo neutro */
+            border: 3px solid var(--cor-primaria);          /* destaque consistente */
+            border-radius: var(--border-radius);
+            padding: 16px 20px;
+            margin-bottom: 24px;                           /* espaço antes do próximo bloco */
+            box-shadow: var(--sombra-offset-x) var(--sombra-offset-y) var(--sombra-blur) var(--cor-texto) !important;
+        }}
+
+        .info-ranking-card h2 {{
+            margin: 0 0 8px 0;
+            font-family: var(--fonte-titulo);
+            font-size: 1.1rem;
+            font-style: italic;
+            color: var(--cor-primaria);
+            text-transform: uppercase;
+        }}
+
+        .info-ranking-card p {{
+            margin: 0;
+            font-family: var(--fonte-texto);
+            font-size: 0.94rem;
+            line-height: 1.4;
+            color: var(--cor-texto);
+        }}
+
+        /* 31. ACTION PROGRESS CARD (GAMIFICAÇÃO) – DUPLICATA (mantida por compatibilidade) */
+        .action-progress-card {{
+            background-color: var(--cor-primaria);
+            border: 4px solid var(--cor-texto);
+            border-radius: var(--border-radius);
+            padding: 12px;
+            margin-bottom: 12px;
+            box-shadow: var(--sombra-offset-x) var(--sombra-offset-y) var(--sombra-blur) var(--cor-texto) !important;
+        }}
+
+        .action-progress-row {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 6px;
+        }}
+
+        .action-progress-label {{
+            font-family: var(--fonte-titulo);
+            color: var(--cor-texto);
+        }}
+
+        .action-progress-value {{
+            font-family: var(--fonte-titulo);
+            font-weight: bold;
+            color: var(--cor-secundaria);
+        }}
+
+        /* 32. PROGRESS BAR (reutilizo estilos já existentes) */
+        .progress-bar {{
+            width: 100%;
+            background-color: var(--cor-fundo);
+            border: 2px solid var(--cor-texto);
+            border-radius: var(--border-radius);
+            overflow: hidden;
+            height: 12px;
+            margin-top: 4px;
+        }}
+
+        .progress-bar-fill {{
+            height: 100%;
+            background-color: var(--cor-secundaria);
+            width: 0%;               /* será preenchido dinamicamente via style inline */
+            transition: width 0.4s ease;
+        }}
+
+        /* 33. CARD DE FORMULÁRIO DE MATERIAIS (usado pelo SUPERVISOR) */
+        .material-card {{
+            background-color: var(--cor-branco);
+            border: 4px solid var(--cor-texto);
+            border-radius: var(--border-radius);
+            padding: 20px;
+            margin-bottom: 18px;
+            box-shadow: var(--sombra-offset-x) var(--sombra-offset-y) var(--sombra-blur) var(--cor-texto) !important;
+        }}
+
+        .material-card h3 {{
+            margin: 0 0 12px 0;
+            font-family: var(--fonte-titulo);
+            font-size: 1.4rem;
+            color: var(--cor-secundaria);
+            text-transform: uppercase;
+            text-align: center;
+        }}
+
+        .material-card .stSelectbox,
+        .material-card .stNumberInput,
+        .material-card .stButton {{
+            margin-bottom: 12px !important;
+        }}
+
+        /* 34. TABELA DE RESUMO DE MATERIAIS – estilos reforçados para obedecer ao tema */
+        /* Aumentamos a especificidade e usamos !important para sobrescrever os estilos
+           internos que o Streamlit aplica às tabelas (classe .stDataFrame). */
+        .material-summary-table,
+        .material-summary-table th,
+        .material-summary-table td {{
+            background-color: transparent !important;
+            color: inherit !important;
+        }}
+
+        .material-summary-table th {{
+            background-color: var(--cor-primaria) !important;
+            color: var(--cor-texto) !important;
+            font-weight: bold;
+            text-transform: uppercase;
+            border: 2px solid var(--cor-texto) !important;
+            padding: 8px 12px !important;
+            text-align: center !important;
+            font-family: var(--fonte-texto) !important;
+        }}
+
+        .material-summary-table td {{
+            background-color: var(--cor-branco) !important;
+            color: var(--cor-texto) !important;
+            border: 2px solid var(--cor-texto) !important;
+            padding: 8px 12px !important;
+            text-align: center !important;
+            font-family: var(--fonte-texto) !important;
+        }}
+
+        .material-summary-table .restante {{
+            font-weight: bold !important;
+            color: var(--cor-secundaria) !important;
+        }}
+
+        /* 35. BOTÕES PERSONALIZADOS DO MÓDULO DE MATERIAIS */
+        /* Botões dentro do card de registro */
+        .material-card button {{
+            background-color: var(--cor-secundaria) !important;
+            color: var(--cor-branco) !important;
+            border: var(--borda-largura) var(--borda-estilo) var(--cor-texto) !important;
+            border-radius: var(--border-radius) !important;
+            padding: 0.45rem 0.9rem !important;
+            font-family: var(--fonte-titulo) !important;
+            font-size: 0.9rem !important;
+            text-transform: uppercase !important;
+            cursor: pointer;
+        }}
+
+        /* Botões “Salvar nível” que aparecem abaixo da tabela de resumo */
+        .material-summary-table button,
+        .material-save-btn {{
+            background-color: var(--cor-secundaria) !important;
+            color: var(--cor-branco) !important;
+            border: var(--borda-largura) var(--borda-estilo) var(--cor-texto) !important;
+            border-radius: var(--border-radius) !important;
+            padding: 0.35rem 0.7rem !important;
+            font-family: var(--fonte-titulo) !important;
+            font-size: 0.85rem !important;
+            text-transform: uppercase !important;
+            cursor: pointer;
+        }}
+
+        /* Ajuste visual para os selects de nível dentro da tabela */
+        .material-summary-table .stSelectbox {{
+            margin-bottom: 6px !important;
+        }}
+
     </style>
     """
-
 
 def inject_styles():
     """
@@ -715,10 +959,10 @@ def inject_styles():
     logo após st.set_page_config().
     
     Example:
-        >>> import streamlit as st
-        >>> from utils.styles import inject_styles
-        >>> st.set_page_config(page_title="Minha App")
-        >>> inject_styles()
+        #>>> import streamlit as st
+        #>>> from utils.styles import inject_styles
+        #>>> st.set_page_config(page_title="Minha App")
+        #>>> inject_styles()
     """
     import streamlit as st
     st.markdown(get_css(), unsafe_allow_html=True)

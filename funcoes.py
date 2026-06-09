@@ -11,6 +11,9 @@ from geopy.geocoders import Nominatim
 import streamlit as st
 import traceback
 
+# Gamificação – dicionários de pontos e limites diários
+from utils.gamification import PONTUACAO, LIMITE_DIARIO
+
 # Google Credentials
 from google.oauth2.service_account import Credentials as ServiceAccountCredentials
 from google.oauth2.credentials import Credentials as OAuthCredentials
@@ -180,7 +183,7 @@ def _get_gspread_client(secrets, error_log=None):
             error_log.append({
                 'data': get_agora_br().strftime("%d/%m/%Y %H:%M:%S"),
                 'erro': str(e),
-                'funcao': '_get_gspread_client',
+                'funcao': '_gspread_client',
                 'traceback': traceback.format_exc(),
                 'tipo': type(e).__name__
             })
@@ -225,7 +228,7 @@ def registrar_acao(id_usuario, tipo_acao, localizacao, feedback, secrets, error_
     
     Args:
         id_usuario (str): ID único do usuário que realizou a ação.
-        tipo_acao (str): Descrição do tipo de ação realizada (ex: 'Check-in', 'CONCLUIU: MISSÃO').
+        tipo_acao (str): Descrição do tipo de ação (ex: 'Check‑in', 'CONCLUIU: MISSÃO').
         localizacao (str): Coordenadas GPS no formato 'lat,lon' ou string indicando ausência de GPS.
         feedback (str): Texto de feedback ou observação do usuário.
         secrets (dict): Dicionário com as credenciais do Google.
@@ -261,6 +264,38 @@ def registrar_acao(id_usuario, tipo_acao, localizacao, feedback, secrets, error_
             str(endereco),
             str(feedback)
         ])
+
+        # Normalização da ação para pontuação
+        acao_normalizada = None
+        a = tipo_acao.lower()
+        if "check-in" in a:
+            acao_normalizada = "checkin"
+        elif "check-out" in a:
+            acao_normalizada = "checkout"
+        elif "concluiu" in a or "missão" in a:
+            acao_normalizada = "missao"
+        elif "ação:" in a and "instagram" in a:
+            acao_normalizada = "insta_engage"
+        elif "ação:" in a and "whatsapp" in a:
+            acao_normalizada = "whatsapp"
+        elif "talk_team" in a:
+            acao_normalizada = "talk_team"
+
+        if acao_normalizada:
+            u = st.session_state.get("usuario_logado", {})
+            nome = u.get("Nome", "Usuario")
+            cargo = u.get("Cargo", "").lower()
+
+            atualizar_pontuacao_usuario(
+                id_usuario=id_usuario,
+                nome=nome,
+                cargo=cargo,
+                acao=acao_normalizada,
+                planilha_id=secrets["planilha"]["id"],
+                secrets=secrets,
+                error_log=error_log
+            )
+
         return True
 
     except Exception as e:
@@ -535,7 +570,7 @@ def carregar_macro_grupos_cached(planilha_id):
     """
     try:
         # Usa URL pública para evitar chamada de API
-        url = f"https://docs.google.com/spreadsheets/d/{planilha_id}/gviz/tq?tqx=out:csv&sheet=Grupos"
+        url = f"https://docs.google.com/spreadsheets/d/{planilha_id}/gviz/tq?out:csv&sheet=Grupos"
         df = pd.read_csv(url)
 
         # Extrai Macro_Grupos únicos (excluindo vazios)
@@ -564,7 +599,7 @@ def carregar_grupos_completos_cached(planilha_id):
     """
     try:
         # Usa URL pública para evitar chamada de API
-        url = f"https://docs.google.com/spreadsheets/d/{planilha_id}/gviz/tq?tqx=out:csv&sheet=Grupos"
+        url = f"https://docs.google.com/spreadsheets/d/{planilha_id}/gviz/tq?out=CSV&sheet=Grupos"
         df = pd.read_csv(url)
 
         # ✅ FILTRA: Exclui linhas que são apenas Macro_Grupos (ID começa com '_MACRO_')
@@ -676,7 +711,6 @@ def criar_novo_macro_grupo(nome_macro, secrets, error_log=None):
                 'tipo': type(e).__name__
             })
         return False, f"Erro: {str(e)}"
-
 
 
 # =============================================================================
@@ -791,7 +825,7 @@ def simular_acao_usuario(id_usuario, tipo_acao, secrets, error_log=None):
     
     Args:
         id_usuario (str): ID do usuário que está sendo simulado.
-        tipo_acao (str): Tipo de ação a ser simulada (ex: 'Check-in').
+        tipo_acao (str): Tipo de ação a ser simulada (ex: 'Check‑in').
         secrets (dict): Dicionário com as credenciais do Google.
         error_log (list, optional): Lista para registro de erros. Se fornecida, erros serão adicionados a ela.
     
@@ -823,3 +857,450 @@ def simular_acao_usuario(id_usuario, tipo_acao, secrets, error_log=None):
             'status': 'SIMULAÇÃO FALHOU',
             'erro': str(e)
         }
+
+
+# -------------------------------------------------------------------------
+# G A M I F I C A Ç Ã O   – FUNÇÕES AUXILIARES
+# -------------------------------------------------------------------------
+def _ws_leaderboard(planilha_id, secrets, error_log=None):
+    """
+    Retorna a Worksheet da aba **Leaderboard** (mesma planilha usada nas demais funções).
+
+    **Novas colunas** (ordem abaixo):
+        id_usuario, nome, cargo, pontos_total, ultima_atualizacao,
+        pontos_dia, data_dia, tipo_acao, pontos_ganhos
+
+    Caso a aba ainda não exista, a exceção será propagada ao chamador.
+    """
+    client = _get_gspread_client(secrets, error_log)
+    planilha = client.open_by_key(planilha_id)
+    return planilha.worksheet("Leaderboard")
+
+
+def atualizar_pontuacao_usuario(
+        id_usuario: str,
+        nome: str,
+        cargo: str,
+        acao: str,
+        planilha_id: str,
+        secrets,
+        error_log=None) -> bool:
+    """
+    Registra **uma linha nova** na aba Leaderboard a cada ação do usuário.
+
+    Estrutura da aba (colunas na ordem exata):
+        1. id_usuario
+        2. nome
+        3. cargo
+        4. pontos_total          – somatório acumulado (apenas se ganhar pontos)
+        5. ultima_atualizacao   – timestamp da última gravação que gerou pontos
+        6. pontos_dia           – contagem de ações que geraram pontos hoje
+        7. data_dia             – data (dd/mm/yyyy) referente a ``pontos_dia``
+        8. tipo_acao            – código interno da ação (ex: "checkin")
+        9. pontos_ganhos        – pontos efetivamente concedidos nesta ação
+    """
+    from utils.gamification import PONTUACAO, LIMITE_DIARIO
+
+    try:
+        ws = _ws_leaderboard(planilha_id, secrets, error_log)
+
+        # ---------------------------------------------------------
+        # 1️⃣  Obter todas as linhas já existentes (para cálculos)
+        # ---------------------------------------------------------
+        registros = ws.get_all_records()
+        linhas_usuario = [r for r in registros if str(r.get('id_usuario')) == str(id_usuario)]
+
+        # ---------------------------------------------------------
+        # 2️⃣  Determinar o total acumulado já existente
+        # ---------------------------------------------------------
+        if linhas_usuario:
+            total_atual = max([int(r.get('pontos_total', 0) or 0) for r in linhas_usuario])
+        else:
+            total_atual = 0
+
+        # ---------------------------------------------------------
+        # 3️⃣  Determinar contagem de ações hoje (para limite diário)
+        # ---------------------------------------------------------
+        hoje_str = get_agora_br().strftime("%d/%m/%Y")
+        acoes_hoje = [
+            r for r in linhas_usuario
+            if r.get('data_dia') == hoje_str and r.get('tipo_acao') == acao
+        ]
+        limite = LIMITE_DIARIO.get(acao)          # None → sem limite
+        limite_atingido = (limite is not None and len(acoes_hoje) >= limite)
+
+        # ---------------------------------------------------------
+        # 4️⃣  Calcular pontos que deverão ser creditados nesta ação
+        # ---------------------------------------------------------
+        ganho = 0 if limite_atingido else PONTUACAO.get(acao, 0)
+
+        # Atualiza total e pontos do dia somente se houver ganho
+        novo_total = total_atual + ganho
+
+        # Se for a primeira ação do usuário ou se o dia mudou, reseta pontos_dia
+        if linhas_usuario:
+            # última linha gravada do usuário (pela data de atualização)
+            ultima_linha = max(
+                linhas_usuario,
+                key=lambda r: r.get('ultima_atualizacao', '')
+            )
+            pontos_dia_atual = int(ultima_linha.get('pontos_dia') or 0)
+            data_dia_atual = ultima_linha.get('data_dia')
+            if data_dia_atual != hoje_str:
+                pontos_dia_atual = 0
+        else:
+            pontos_dia_atual = 0
+
+        novo_pontos_dia = pontos_dia_atual + (1 if ganho > 0 else 0)
+
+        # ---------------------------------------------------------
+        # 5️⃣  Gravar a nova linha
+        # ---------------------------------------------------------
+        ws.append_row([
+            str(id_usuario),                # id_usuario
+            str(nome),                     # nome
+            str(cargo),                    # cargo
+            novo_total,                    # pontos_total
+            get_agora_br().strftime("%d/%m/%Y %H:%M:%S"),  # ultima_atualizacao
+            novo_pontos_dia,               # pontos_dia
+            hoje_str,                      # data_dia
+            acao,                          # tipo_acao
+            ganho                          # pontos_ganhos
+        ])
+
+        # ---------------------------------------------------------
+        # 6️⃣  Retorno
+        # ---------------------------------------------------------
+        return True
+
+    except Exception as e:
+        if error_log is not None:
+            error_log.append({
+                'data': get_agora_br().strftime("%d/%m/%Y %H:%M:%S"),
+                'erro': str(e),
+                'funcao': 'atualizar_pontuacao_usuario',
+                'traceback': traceback.format_exc(),
+                'tipo': type(e).__name__
+            })
+        print(f"Erro ao atualizar pontuação: {e}")
+        return False
+
+
+def registrar_acao_com_pontuacao(
+        id_usuario: str,
+        tipo_acao: str,
+        localizacao,
+        feedback,
+        secrets,
+        error_log=None) -> bool:
+    """
+    Wrapper que (a) registra a ação na aba **Logs** (mantém histórico)
+    e (b) converte a ação para o código interno da gamificação, atualizando a pontuação do usuário.
+    Sempre retorna o resultado da gravação em Logs (True/False).
+    """
+    # Função depreciada – redireciona para registrar_acao que já contém
+    # a lógica completa de registro + pontuação.
+    return registrar_acao(
+        id_usuario=id_usuario,
+        tipo_acao=tipo_acao,
+        localizacao=localizacao,
+        feedback=feedback,
+        secrets=secrets,
+        error_log=error_log
+    )
+
+
+# =============================================================================
+# NOVAS FUNÇÕES DE GESTÃO DE MATERIAIS
+# =============================================================================
+
+def registrar_material_supervisor(
+        id_usuario: str,
+        nome_usuario: str,
+        tipo_material: str,
+        nivel_material: str,      # ← “Pouco”, “Médio”, “Muito” ou “Acabou”
+        secrets,
+        id_grupo: str | None = None,
+        error_log=None) -> bool:
+    """
+    Registra a **quantidade** de material com base num nível simbólico.
+
+    * **nivel_material** → valor numérico (mapeado na constante
+      ``NIVEL_PARA_QUANTIDADE``).  O valor numérico será salvo nas
+      colunas ``quantidade_total`` e ``quantidade_restante`` (restante =
+      total, pois ainda não há “usado”).
+    * O próprio nível é armazenado na coluna ``nivel_material`` para
+      que o supervisor possa visualizá‑lo/alterá‑lo depois.
+
+    Args:
+        id_usuario (str): Identificador do colaborador ou do grupo.
+        nome_usuario (str): Nome do colaborador ou do grupo.
+        tipo_material (str): Nome do material (ex.: “Água”, “Máscara”).
+        nivel_material (str): “Pouco”, “Médio”, “Muito” ou “Acabou”.
+        secrets (dict): Credenciais do Google.
+        id_grupo (str | None): Identificador do grupo (opcional).
+        error_log (list, optional): Lista de erros.
+
+    Returns:
+        bool: True se a gravação ocorreu sem erro.
+    """
+    try:
+        # 1️⃣ cliente gspread
+        client = _get_gspread_client(secrets, error_log)
+        if client is None:
+            return False
+
+        # 2️⃣ aba “Materiais” (deve existir na planilha)
+        planilha = client.open_by_key(secrets["planilha"]["id"])
+        aba = planilha.worksheet("Materiais")
+
+        # 3️⃣ Conversão de nível → quantidade (valor fixo)
+        NIVEL_PARA_QUANTIDADE = {
+            "Pouco":   100,
+            "Médio":  500,
+            "Muito": 1000,
+            "Acabou": 0
+        }
+        total = NIVEL_PARA_QUANTIDADE.get(str(nivel_material).strip().title(), 0)
+        nova_restante = total          # ainda não há “usado”
+
+        # 4️⃣ Inserir nova linha – garante colunas de nível e total
+        agora = get_agora_br().strftime("%d/%m/%Y %H:%M:%S")
+        cabecalho = aba.row_values(1)
+
+        # Garante que a coluna “nivel_material” exista
+        if 'nivel_material' not in cabecalho:
+            aba.update('A1', cabecalho + ['nivel_material'])
+            cabecalho.append('nivel_material')
+
+        # Constrói a linha na ordem exata do cabeçalho
+        nova_linha = [
+            str(id_usuario),               # id_usuario
+            str(nome_usuario),             # nome_usuario
+            agora,                         # data_registro
+            str(tipo_material).strip(),    # tipo_material
+            total,                         # quantidade_total
+            int(nova_restante)             # quantidade_restante
+        ]
+
+        # Coluna opcional “id_grupo”
+        if 'id_grupo' in cabecalho:
+            nova_linha.append(str(id_grupo) if id_grupo is not None else "")
+
+        # Coluna “nivel_material”
+        nova_linha.append(str(nivel_material).strip().title())
+
+        aba.append_row(nova_linha)
+
+        return True
+
+    except Exception as e:
+        if error_log is not None:
+            error_log.append({
+                'data': get_agora_br().strftime("%d/%m/%Y %H:%M:%S"),
+                'erro': str(e),
+                'funcao': 'registrar_material_supervisor',
+                'traceback': traceback.format_exc(),
+                'tipo': type(e).__name__
+            })
+        print(f"Erro ao registrar material: {e}")
+        return False
+
+
+@st.cache_data(ttl=120)
+def obter_resumo_materiais(id_usuario: str, _secrets):
+    """
+    Gera um DataFrame *agregado* de materiais para o usuário/grupo indicado.
+    As colunas retornadas são:
+        - tipo_material
+        - total_recebido
+        - restante
+    """
+    try:
+        client = _get_gspread_client(_secrets)
+        aba = client.open_by_key(_secrets["planilha"]["id"]).worksheet("Materiais")
+        df = pd.DataFrame(aba.get_all_records())
+
+        if df.empty:
+            return pd.DataFrame()
+
+        filtro = df['id_usuario'].astype(str) == str(id_usuario).strip()
+        df_user = df[filtro][['tipo_material',
+                               'quantidade_total' if 'quantidade_total' in df.columns else 'quantidade_recebida',
+                               'quantidade_restante']].copy()
+
+        col_qtd = 'quantidade_total' if 'quantidade_total' in df_user.columns else 'quantidade_recebida'
+        df_user = df_user.rename(columns={col_qtd: 'total_recebido',
+                                          'quantidade_restante': 'restante'})
+
+        resumo = (
+            df_user
+            .groupby('tipo_material')
+            .agg(total_recebido=('total_recebido', 'sum'),
+                 restante=('restante', 'last'))
+            .reset_index()
+        )
+        return resumo
+    except Exception as e:
+        print(f"Erro ao gerar resumo de materiais: {e}")
+        return pd.DataFrame()
+
+
+# -------------------------------------------------------------------------
+# 2️⃣ FUNÇÃO DE OBTER OS REGISTROS “BRUTOS” DE UM GRUPO
+# -------------------------------------------------------------------------
+def obter_materiais_por_grupo(id_usuario: str, _secrets):
+    """
+    Retorna **DataFrame** de materiais para o usuário/grupo indicado.
+    Cada linha representa um tipo de material já registrado.
+    """
+    try:
+        client = _get_gspread_client(_secrets)
+        aba = client.open_by_key(_secrets["planilha"]["id"]).worksheet("Materiais")
+        df = pd.DataFrame(aba.get_all_records())
+
+        if df.empty:
+            return pd.DataFrame()
+
+        filtro = df['id_usuario'].astype(str) == str(id_usuario).strip()
+
+        # Seleciona colunas obrigatórias
+        col_qtd = 'quantidade_total' if 'quantidade_total' in df.columns else 'quantidade_recebida'
+        col_nivel = 'nivel_material' if 'nivel_material' in df.columns else None
+
+        cols = ['tipo_material', col_qtd, 'quantidade_restante']
+        if col_nivel:
+            cols.append(col_nivel)
+
+        df_grp = df[filtro][cols].copy()
+
+        # Renomeia quantidade para total
+        df_grp = df_grp.rename(columns={col_qtd: 'quantidade_total'})
+
+        # Garante coluna nivel_material com valor padrão “Médio”
+        if 'nivel_material' not in df_grp.columns:
+            df_grp['nivel_material'] = 'Médio'
+
+        return df_grp.reset_index(drop=True)
+    except Exception as e:
+        print(f"Erro ao obter materiais por grupo: {e}")
+        return pd.DataFrame()
+
+
+def atualizar_material_grupo(
+        id_usuario: str,
+        tipo_material: str,
+        novo_total: int,
+        novo_restante: int,
+        _secrets,
+        error_log=None) -> bool:
+    """
+    Busca a **última** linha da aba “Materiais” que corresponde ao ``id_usuario`` + ``tipo_material``.
+    Atualiza as colunas ``quantidade_total`` e ``quantidade_restante`` com os novos valores.
+    Se a coluna ``quantidade_total`` ainda não existir (planilha antiga),
+    cria‑a ao atualizar.
+    """
+    try:
+        client = _get_gspread_client(_secrets, error_log)
+        if client is None:
+            return False
+
+        planilha = client.open_by_key(_secrets["planilha"]["id"])
+        aba = planilha.worksheet("Materiais")
+        # 1️⃣ Obter cabeçalho e garantir colunas
+        cabecalho = aba.row_values(1)
+
+        if 'quantidade_total' not in cabecalho and 'quantidade_recebida' not in cabecalho:
+            aba.update('A1', cabecalho + ['quantidade_total'])
+            cabecalho.append('quantidade_total')
+
+        if 'quantidade_restante' not in cabecalho:
+            aba.update('A1', cabecalho + ['quantidade_restante'])
+            cabecalho.append('quantidade_restante')
+
+        if 'quantidade_total' in cabecalho:
+            col_total = cabecalho.index('quantidade_total') + 1
+        else:
+            col_total = cabecalho.index('quantidade_recebida') + 1
+        col_rest = cabecalho.index('quantidade_restante') + 1
+
+        # 2️⃣ Procurar a linha alvo
+        linhas = aba.get_all_records()
+        linha_alvo = None
+        for i, linha in enumerate(linhas, start=2):
+            if str(linha.get('id_usuario')).strip() == str(id_usuario).strip() and \
+               str(linha.get('tipo_material')).strip().lower() == str(tipo_material).strip().lower():
+                linha_alvo = i
+
+        if linha_alvo is None:
+            return False
+
+        # 3️⃣ Atualizar
+        aba.update_cell(linha_alvo, col_total, int(novo_total))
+        aba.update_cell(linha_alvo, col_rest, int(novo_restante))
+        return True
+    except Exception as e:
+        if error_log is not None:
+            error_log.append({
+                'data': get_agora_br().strftime("%d/%m/%Y %H:%M:%S"),
+                'erro': str(e),
+                'funcao': 'atualizar_material_grupo',
+                'traceback': traceback.format_exc(),
+                'tipo': type(e).__name__
+            })
+        print(f"Erro ao atualizar material: {e}")
+        return False
+
+
+# -------------------------------------------------------------------------
+# 4️⃣ FUNÇÃO DE ATUALIZAÇÃO DO NÍVEL DE ESTOQUE (NOVA)
+# -------------------------------------------------------------------------
+def atualizar_nivel_material_grupo(
+        id_usuario: str,
+        tipo_material: str,
+        nivel: str,
+        _secrets,
+        error_log=None) -> bool:
+    """
+    Atualiza a coluna ``nivel_material`` (Pouco / Médio / Muito) da
+    última linha que corresponde ao ``id_usuario`` + ``tipo_material``.
+    Cria a coluna na planilha caso ainda não exista.
+    """
+    try:
+        client = _get_gspread_client(_secrets, error_log)
+        if client is None:
+            return False
+
+        planilha = client.open_by_key(_secrets["planilha"]["id"])
+        aba = planilha.worksheet("Materiais")
+        # Garantir existência da coluna de nível
+        cabecalho = aba.row_values(1)
+        if 'nivel_material' not in cabecalho:
+            aba.update('A1', cabecalho + ['nivel_material'])
+            cabecalho.append('nivel_material')
+        col_nivel = cabecalho.index('nivel_material') + 1
+
+        # Encontrar a linha alvo (última ocorrência)
+        linhas = aba.get_all_records()
+        linha_alvo = None
+        for i, linha in enumerate(linhas, start=2):
+            if str(linha.get('id_usuario')).strip() == str(id_usuario).strip() and \
+               str(linha.get('tipo_material')).strip().lower() == str(tipo_material).strip().lower():
+                linha_alvo = i   # sempre a última encontrada
+
+        if linha_alvo is None:
+            return False
+
+        aba.update_cell(linha_alvo, col_nivel, nivel)
+        return True
+    except Exception as e:
+        if error_log is not None:
+            error_log.append({
+                'data': get_agora_br().strftime("%d/%m/%Y %H:%M:%S"),
+                'erro': str(e),
+                'funcao': 'atualizar_nivel_material_grupo',
+                'traceback': traceback.format_exc(),
+                'tipo': type(e).__name__
+            })
+        print(f"Erro ao atualizar nível de material: {e}")
+        return False

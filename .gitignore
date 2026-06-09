@@ -17,3 +17,5 @@ env/
 .DS_Store
 .vscode/
 .idea/
+.aider*
+.env

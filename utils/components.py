@@ -8,7 +8,10 @@
 # =============================================================================
 
 import streamlit as st
-import urllib.parse
+import pandas as pd
+from typing import List, Dict, Any
+from utils.gamification import ACTION_LABELS   # ← novo import
+import funcoes as fn                  # <-- IMPORTAÇÃO PADRÃO (como nos outros componentes)
 
 
 def render_login_header():
@@ -30,11 +33,11 @@ def render_login_box():
 
 
 def render_welcome_banner(nome_usuario):
-    """Renderiza o banner de boas-vindas do usuário."""
+    """Renderiza o banner de boas‑vindas do usuário."""
     nome_primeiro = nome_usuario.split()[0].upper()
     st.markdown(f"""
         <div class="welcome-banner">
-            <h3 class="welcome-banner-title">BEM-VINDO,</h3>
+            <h3 class="welcome-banner-title">BEM‑VINDO,</h3>
             <h1 class="welcome-banner-name">{nome_primeiro}</h1>
         </div>
     """, unsafe_allow_html=True)
@@ -219,3 +222,291 @@ def render_metric_row(metrics):
             {items_html}
         </div>
     """, unsafe_allow_html=True)
+
+
+def render_position_badge(posicao: int) -> str:
+    """
+    Retorna o HTML de um *badge* que indica a posição no ranking.
+    O próprio CSS `.position-badge` já define cores e cantos.
+    """
+    return f'<span class="position-badge">{posicao}°</span>'
+
+
+def render_points_badge(pontos) -> str:
+    """
+    Renderiza o badge que indica quantos pontos foram ganhos.
+
+    O parâmetro ``pontos`` pode ser int, float, str ou até ``None``.
+    Se não for possível convertê‑lo para inteiro, a função devolve
+    uma *string* vazia (nenhum badge será exibido) – evitando o
+    ``TypeError`` que ocorria ao comparar string com int.
+    """
+    try:
+        pts = int(float(pontos))
+    except (TypeError, ValueError):
+        return ""
+
+    if pts == 0:
+        return ""
+
+    sinal = "+" if pts >= 0 else "-"
+    return f'<span class="points-badge">{sinal}{abs(pts)} pts</span>'
+
+
+def render_progress_bar(percentual: float, label: str | None = None) -> None:
+    """
+    Exibe uma barra de progresso estilizada.
+
+    Args:
+        percentual: Valor entre 0 e 100 (qualquer número será truncado ao intervalo permitido).
+        label: Texto opcional que aparecerá acima da barra.
+    """
+    pct = max(0, min(100, percentual))
+    barra_html = f'''
+        <div class="progress-bar">
+            <div class="progress-bar-fill" style="width:{pct}%"></div>
+        </div>
+    '''
+    if label:
+        barra_html = f'<div style="font-weight:bold;margin-bottom:4px;">{label}</div>' + barra_html
+    st.markdown(barra_html, unsafe_allow_html=True)
+
+
+def render_action_progress(actions: List[Dict[str, Any]]) -> None:
+    """
+    Renderiza cartões de progresso de ações gamificadas.
+
+    **Flexibilidade de chaves** – a página *02_Colaborador.py* envia:
+        - ``nome``   → nome da ação
+        - ``feitas`` → quantidade já efetuada hoje
+        - ``limite`` → limite diário (``None`` = ilimitado)
+        - ``pontos`` → pontos ganhos por ocorrência (opcional)
+
+    Para manter compatibilidade com a definição anterior, o componente aceita
+        também as chaves ``label`` e ``progresso``.  Assim, qualquer um dos dois
+        formatos funciona.
+
+    Exemplo de lista aceita:
+    ```python
+    actions = [
+        {"nome": "Check‑in", "feitas": 1, "limite": 1, "pontos": 10},
+        {"label": "Post Instagram", "progresso": 3, "limite": 5, "pontos": 2},
+    ]
+    ```
+    """
+    for a in actions:
+        raw_label = a.get("label") or a.get("nome") or ""
+        chave_normalizada = raw_label.lower().replace(' ', '_')
+        label = ACTION_LABELS.get(chave_normalizada,
+                                 raw_label.replace('_', ' ').title())
+
+        progresso = a.get("progresso") if a.get("progresso") is not None else a.get("feitas", 0)
+        limite = a.get("limite")
+        pontos = a.get("pontos")
+
+        if limite is None:
+            progresso_txt = f"{int(progresso)} / ∞"
+            pct = 0
+        else:
+            progresso_txt = f"{int(progresso)} / {int(limite)}"
+            pct = (float(progresso) / float(limite) * 100) if limite else 0
+
+        badge_pts = render_points_badge(pontos) if pontos is not None else ""
+
+        st.markdown(f'''
+            <div class="action-progress-card">
+                <div class="action-progress-row">
+                    <span class="action-progress-label">{label}</span>
+                    <span class="action-progress-value">{progresso_txt} {badge_pts}</span>
+                </div>
+                {'<div class="progress-bar"><div class="progress-bar-fill" style="width:' + str(pct) + '%"></div></div>' if limite else ''}
+            </div>
+        ''', unsafe_allow_html=True)
+
+
+def render_leaderboard(ranking: List[Dict[str, Any]]) -> None:
+    """
+    Renderiza o *Leaderboard* completo.
+
+    Cada item da lista deve conter, no mínimo:
+        - ``posicao`` (int): posição no ranking
+        - ``nome`` (str): nome do colaborador
+        - ``pontos`` (int): pontuação total
+        - ``ganho`` (int, opcional): pontos ganhos nesta ação (para exibir o badge)
+
+    Exemplo de estrutura:
+    ```python
+    ranking = [
+        {"posicao": 1, "nome": "Ana", "pontos": 120, "ganho": 10},
+        {"posicao": 2, "nome": "Bruno", "pontos": 95},
+        ...
+    ]
+    ```
+    """
+    if not ranking:
+        st.info("Nenhum dado de ranking disponível.")
+        return
+
+    st.space("small")
+    st.markdown('<div class="leaderboard-header">Classificação e Pontuação</div>', unsafe_allow_html=True)
+
+    for linha in ranking:
+        pos = linha.get("posicao")
+        nome = linha.get("nome", "")
+        pts = linha.get("pontos", 0)
+        ganho = linha.get("ganho")
+
+        badge_pos = render_position_badge(pos) if pos is not None else ""
+        badge_pts = render_points_badge(ganho) if ganho is not None else ""
+
+        linha_html = f'''
+            <div class="leaderboard-row">
+                <div>{badge_pos} <strong>{nome}</strong></div>
+                <div>{pts} pts {badge_pts}</div>
+            </div>
+        '''
+        st.markdown(linha_html, unsafe_allow_html=True)
+
+    st.markdown('</div>', unsafe_allow_html=True)  # fecha .leaderboard-card
+
+
+# ----------------------------------------------------------------------
+# NOVO COMPONENTE – INFORMAÇÃO DO RANKING
+# ----------------------------------------------------------------------
+def render_info_ranking(titulo: str, mensagem: str) -> None:
+    """
+    Renderiza um card informativo *específico* para explicar como funciona
+    o ranking. O visual é mais compacto que ``render_info_banner`` e
+    utiliza a classe CSS ``.info-ranking-card`` definida em
+    ``utils/styles.py``.
+
+    Args:
+        titulo:   Título que aparecerá em ``<h2>`` (ex.: "⚙️ Como funciona o ranking").
+        mensagem: Texto já formatado em HTML/Markdown (pode conter ``<ul>``, ``<li>``, etc.).
+    """
+
+    st.markdown(f'''
+        <div class="info-ranking-card">
+            <h2>{titulo}</h2>
+            <p>{mensagem}</p>
+        </div>
+    ''', unsafe_allow_html=True)
+
+
+# ----------------------------------------------------------------------
+# NOVOS COMPONENTES – REGISTRO E RESUMO DE MATERIAIS
+# ----------------------------------------------------------------------
+def render_material_form(secrets) -> None:
+    """
+    Exibe **card** com formulário **para registrar material a nível de grupo**.
+
+    Não é necessário escolher um colaborador individual; o supervisor
+    informa apenas:
+        • tipo do material (texto livre)
+        • quantidade total recebida
+        • quantidade já utilizada (ou seja, que já saiu do estoque)
+    O componente captura automaticamente o ``ID_Grupo`` do supervisor
+    que está logado e o envia para ``fn.registrar_material_supervisor`` (campo
+    ``id_grupo`` da função backend).  O ``qnt_total`` e o ``qnt_usada``
+    são gravados nas colunas “quantidade_total”, ``quantidade_restante`` e
+    ``nivel_material``.
+    """
+    with st.form(key="form_material_grupo", clear_on_submit=True):
+        # --------‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑‑-
+        tipo_sel = st.text_input(
+            "Tipo de material (ex.: “Panfleto”, “Adesivo”, “Kits”)",
+            key="tipo_input"
+        )
+
+        # Nível de estoque (não há mais quantidade numérica)
+        niveis = ["Pouco", "Médio", "Muito", "Acabou"]
+        nivel_sel = st.selectbox(
+            "Nível de estoque a registrar",
+            niveis,
+            index=niveis.index("Médio"),
+            key="nivel_input"
+        )
+
+        supervisor = st.session_state.get("usuario_logado", {})
+        id_grupo = supervisor.get("ID_Grupo")            # pode ser None
+        nome_grupo = supervisor.get("Nome_Grupo") or f"Grupo {id_grupo}"
+
+        submit = st.form_submit_button("Registrar entrega")
+
+        if submit:
+            ok = fn.registrar_material_supervisor(
+                id_usuario=str(id_grupo) if id_grupo is not None else "DESCONHECIDO",
+                nome_usuario=str(nome_grupo),
+                tipo_material=tipo_sel.strip(),
+                nivel_material=nivel_sel,
+                id_grupo=id_grupo,            # opcional – será gravado na coluna “grupo_id”
+                secrets=secrets,
+                error_log=st.session_state.get('error_log'),
+            )
+            if ok:
+                st.success("Entrega registrada com sucesso!")
+            else:
+                st.error("Falha ao registrar. Consulte os logs.")
+
+
+def render_material_summary(id_usuario: str, secrets) -> None:
+    """
+    Exibe, para cada tipo de material já registrado no **grupo**, um
+    select‑box que permite ao supervisor indicar o nível de estoque:
+    * Pouco
+    * Médio
+    * Muito
+    * Acabou
+
+    Ao clicar em **“💾 Salvar nível”**, o valor escolhido é gravado
+    na coluna ``nivel_material`` da aba “Materiais”.
+    """
+    # 1️⃣ Carregar os registros “brutos” (uma linha por tipo)
+    df_raw = fn.obter_materiais_por_grupo(id_usuario=id_usuario, _secrets=secrets)
+
+    if df_raw.empty:
+        st.info("Ainda não há registros de material para este grupo.")
+        return
+
+    # 2️⃣ Definir opções de nível
+    niveis = ["Pouco", "Médio", "Muito", "Acabou"]
+
+    # 3️⃣ Interface linha‑a‑linha **com botão individual**
+    for idx, row in df_raw.iterrows():
+        with st.container(border=True):
+            st.markdown(f"**Tipo:** {row['tipo_material']}")
+
+            nivel_atual = row.get("nivel_material", "Médio")
+            if nivel_atual not in niveis:
+                nivel_atual = "Médio"
+
+            # selectbox (valor guardado em session_state)
+            select_key = f"nivel_{id_usuario}_{idx}"
+            nivel_escolhido = st.selectbox(
+                "Nível de estoque",
+                niveis,
+                index=niveis.index(nivel_atual),
+                key=select_key
+            )
+
+            # botão “Salvar nível” para **este** material
+            if st.button(
+                "💾 Salvar nível",
+                key=f"save_nivel_{id_usuario}_{idx}",
+                help=f"Salvar nível de estoque para {row['tipo_material']}"
+            ):
+                ok = fn.atualizar_nivel_material_grupo(
+                    id_usuario=str(id_usuario),
+                    tipo_material=str(row["tipo_material"]).strip(),
+                    nivel=nivel_escolhido,
+                    _secrets=secrets,
+                    error_log=st.session_state.get("error_log")
+                )
+                if ok:
+                    st.success(f"Nível de **{row['tipo_material']}** atualizado para **{nivel_escolhido}**.")
+                else:
+                    st.error(f"Falha ao atualizar nível de **{row['tipo_material']}**.")
+
+    # 4️⃣ Separador visual (mantém a estética)
+    st.markdown("---")
+    st.markdown("**📋 Níveis de estoque** (selecionar e salvar individualmente)")
